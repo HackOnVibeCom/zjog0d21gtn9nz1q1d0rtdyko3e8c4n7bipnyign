@@ -8,7 +8,8 @@
 #   • SPA-fallback: во ВЫХЛОП кладём `_redirects` (/* /index.html 200), чтобы клиентский роутинг не давал 404;
 #   • нет package.json → деплой корня `.` как статики (как раньше).
 #   • Ручной override (опц.): repo-vars BUILD_CMD (своя команда сборки) и DEPLOY_DIR (своя папка выхлопа).
-# SSR (Next.js Node-рантайм, БЕЗ output:'export') статикой не собирается → честная страница → хостим локально в Docker.
+# SSR (Next.js Node-рантайм, БЕЗ output:'export') статикой не публикуется: Pages получает короткий queued-marker,
+# который серверный auto-host-scan заменяет настоящим изолированным container runtime на том же домене.
 #
 # ЧЕСТНАЯ ГЛАВНАЯ: сборка упала ИЛИ в выхлопе нет index.html → CI кладёт информативную страницу с логом
 # ошибки вместо пустого 404 / призрака Always Online. Мёртвый деплой виден и объясняет себя.
@@ -117,8 +118,8 @@ jobs:
             echo "::notice::нет package.json+build → деплой '.' как статику"
           fi
           # SSR-детект: Next.js БЕЗ output:'export' и без статического выхлопа = серверный рантайм,
-          # Pages его не тянет → хостим локально в Docker+туннель. Для таких НЕ трогаем домен/DNS,
-          # чтобы Pages не перехватил домен у живого туннеля (иначе сломаем SSR-команду).
+          # Pages его не тянет. На поддомен кладём наблюдаемый маркер ожидания: серверный робот читает его и
+          # передаёт этот Next.js проект в изолированный Docker path (auto-host-scan → host-ssr-team.sh).
           SSR=""
           if [ -f "$APP_DIR/package.json" ] && grep -q '"next"[[:space:]]*:' "$APP_DIR/package.json"; then
             NEXTCFG="$(cat "$APP_DIR"/next.config.* 2>/dev/null || true)"
@@ -131,8 +132,13 @@ jobs:
           # Режим сборки (те же ТРИГГЕРЫ детекции — для честной страницы и подсказки команде):
           #   static (нет build-скрипта) / framework (есть build) / ssr (Next без output:'export').
           MODE="static"; [ -n "$HAS_BUILD" ] && MODE="framework"; [ "$SSR" = "1" ] && MODE="ssr"
+          # Next SSR нельзя выдавать как статический .next. Чистая marker-page делает первый container-host
+          # достижимым для auto-host-scan; это не build failure команды, а очередь серверного runtime.
+          if [ "$SSR" = "1" ]; then
+            DEPLOY_DIR=".hov-ci"; rm -rf "$DEPLOY_DIR"; mkdir -p "$DEPLOY_DIR"; BUILD_FAILED=""
+          fi
           # honest=1 → задеплоили честную страницу (сборка не дала сайт). КРАСНЫЙ решает ФАКТ домена (шаг
-          # «Verify live site»), а не это — честно для всех (SSR-в-Docker с живым доменом → зелёный).
+          # «Verify live site»), а не это. SSR marker-page — намеренная очередь container runtime → зелёный.
           HONEST=""
           [ -n "$BUILD_FAILED" ] && HONEST=1
           echo "ssr=$SSR" >> "$GITHUB_OUTPUT"
@@ -147,7 +153,17 @@ jobs:
           MODE: ${{ steps.detect.outputs.mode }}
         run: |
           mkdir -p "$DEPLOY_DIR"
-          if [ -f "$DEPLOY_DIR/index.html" ]; then
+          if [ "$MODE" = "ssr" ]; then
+            echo "::notice::MODE=ssr → marker-page ожидания изолированного SSR container runtime"
+            {
+              printf '%s' '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Server app — deployed by your team — HackOnVibe</title>'
+              printf '%s' '<style>body{font:16px/1.6 system-ui,sans-serif;max-width:52rem;margin:3rem auto;padding:0 1.2rem;color:#222}h1{color:#2c6fbf}code{background:#f0f0f0;padding:2px 6px;border-radius:5px}.card{background:#eef4fb;border:1px solid #d3e2f3;border-radius:12px;padding:1rem 1.3rem;margin:1.2rem 0}.card li{margin:.5rem 0}a{color:#2c6fbf}</style></head><body>'
+              printf '%s' '<h1>🔵 SSR container is being prepared</h1>'
+              printf '%s' '<p data-ssr-container-state="queued"><b>Build did not produce a live site.</b> This Next.js project needs its server runtime, so HackOnVibe is preparing it in an isolated container.</p>'
+              printf '%s' '<div class="card"><p style="margin:0"><b>No build-mode change is needed.</b></p><p>The provisioning robot detects this queue marker, builds the repository with <code>Dockerfile.nextjs-ssr</code>, then replaces this page at the same team domain.</p></div>'
+              printf '%s' '<p style="color:#888;margin-top:2rem;font-size:13px">HackOnVibe CI &mdash; waiting for isolated SSR container provisioning.</p></body></html>'
+            } > "$DEPLOY_DIR/index.html"
+          elif [ -f "$DEPLOY_DIR/index.html" ]; then
             echo "::notice::index.html есть в ${DEPLOY_DIR} — деплоим сайт как есть"
           else
             echo "::warning::в ${DEPLOY_DIR} нет index.html → деплою информативную страницу вместо 404/призрака"
@@ -164,9 +180,9 @@ jobs:
               printf '%s' '<div class="fork"><h3>3 ways we can build your site — we pick automatically from your files:</h3><ul>'
               printf '%s' '<li>🟢 <b>Plain website</b> — if there is <b>no <code>build</code> script</b> in <code>package.json</code> (or no <code>package.json</code>), we put your files online exactly as they are, so your <code>index.html</code> shows up.</li>'
               printf '%s' '<li>🟡 <b>Built app</b> — if <code>package.json</code> has a <b><code>build</code></b> script for a static tool (React/Vite/Astro, or Next.js with <code>output:&#39;export&#39;</code>), we run the build and publish the built folder (<code>dist</code>/<code>build</code>/<code>out</code>).</li>'
-              printf '%s' '<li>🔵 <b>Server app</b> — if it is <b>Next.js with a <code>build</code> but no <code>output:&#39;export&#39;</code></b>, it needs a live server, so we run it for you in a container (you may need to give us the API keys it needs).</li>'
+              printf '%s' '<li>🔵 <b>Server app</b> — if it is <b>Next.js with a <code>build</code> but no <code>output:&#39;export&#39;</code></b> (or a Node/Express backend), it needs a live server. <b>HackOnVibe hosts static sites only</b> &mdash; deploy the server yourself on <b>Vercel</b> (or Render/Railway/Fly) and paste your live link in your <a href="https://hackonvibe.com/me">/me</a> cabinet, so judges open the right site.</li>'
               printf '%s' '</ul>'
-              printf '<p class="here"><b>Right now your repo is in: %s.</b> To switch: <b>delete the <code>build</code> script</b> → 🟢 Plain website · <b>add <code>output:&#39;export&#39;</code></b> → 🟡 Built app · <b>keep it + send us the API keys</b> → 🔵 Server app.</p>' "$HERE"
+              printf '<p class="here"><b>Right now your repo is in: %s.</b> To switch: <b>delete the <code>build</code> script</b> → 🟢 Plain website · <b>add <code>output:&#39;export&#39;</code></b> → 🟡 Built app · <b>keep the server + deploy it on Vercel, link in /me</b> → 🔵 Server app.</p>' "$HERE"
               printf '%s' '</div>'
               if [ -n "$LOG" ]; then
                 printf '%s' '<p>The build command <b>failed</b> — the exact error is below. Fix it (or switch build mode above), then push to <code>main</code> again — the site rebuilds automatically.</p><h3>Build log (last lines):</h3><pre>'
@@ -189,6 +205,29 @@ jobs:
           else
             echo "::notice::_headers уже есть в ${DEPLOY_DIR} — не трогаю"
           fi
+      - name: Ensure Cloudflare Pages project exists
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          TOK: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          # ⚠️ ПРОБЕЛ ПОСЛЕ ДВОЕТОЧИЯ. Cloudflare отдаёт ФОРМАТИРОВАННЫЙ JSON: "success": true. Точная
+          # подстрока '"success":true' не совпадала НИКОГДА, и успешное создание проекта уходило в else
+          # с «Could not create or confirm». Пока проекты создавал заранее ensure-reserve-pool, деплой
+          # попадал в ветку «already exists» и баг был не виден; на первом деплое НОВОГО проекта (команды
+          # пересозданы на неугадываемых адресах) падали все — домен не привязывался, поддомен отдавал
+          # NXDOMAIN. Сверяем регуляркой, терпимой к пробелам.
+          BODY="$(curl -sS -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects" \
+            -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+            --data "{\"name\":\"${CF_PROJECT}\",\"production_branch\":\"main\"}")"
+          if printf '%s' "$BODY" | grep -Eq '"success":[[:space:]]*true'; then
+            echo "::notice::Pages project created: ${CF_PROJECT}"
+          elif printf '%s' "$BODY" | grep -Eqi 'already exists|8000001'; then
+            echo "::notice::Pages project already exists: ${CF_PROJECT}"
+          else
+            printf '%s\n' "$BODY"
+            echo "::error::Could not create or confirm Pages project ${CF_PROJECT}"
+            exit 1
+          fi
       - name: Deploy to Cloudflare Pages
         if: steps.guard.outputs.ok == 'true'
         uses: cloudflare/wrangler-action@v3
@@ -196,24 +235,24 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: fa36ce8e651a803962efe3793f9c4b51
           command: pages deploy ${{ steps.detect.outputs.deploy_dir }} --project-name=${{ env.CF_PROJECT }} --branch=main
-      - name: Attach custom domain (не для SSR — у них домен держит туннель)
-        if: steps.guard.outputs.ok == 'true' && steps.detect.outputs.ssr != '1'
+      - name: Attach custom domain (поддомен отдаёт сайт или заглушку сервера — для всех)
+        if: steps.guard.outputs.ok == 'true'
         env:
           TOK: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           DOMAIN="${CF_PROJECT}.hackonvibe.com"
           curl -s -X POST "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PROJECT}/domains" \
             -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
-            --data "{\"name\":\"${DOMAIN}\"}" | grep -q '"success":true' \
+            --data "{\"name\":\"${DOMAIN}\"}" | grep -Eq '"success":[[:space:]]*true' \
             && echo "::notice::домен привязан к проекту → https://$DOMAIN" \
             || echo "::notice::домен уже привязан к проекту (норма при повторном деплое)"
-      - name: Ensure DNS record (UPSERT CNAME -> pages.dev; не для SSR)
-        if: steps.guard.outputs.ok == 'true' && steps.detect.outputs.ssr != '1'
+      - name: Ensure DNS record (UPSERT CNAME -> pages.dev — для всех)
+        if: steps.guard.outputs.ok == 'true'
         env:
           TOK: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           # UPSERT: если запись есть — ОБНОВЛЯЕМ content на pages.dev (самолечение: перецепит домен,
-          # даже если он указывал на старый туннель); нет — создаём. Идемпотентно.
+          # даже если он указывал на старый адрес); нет — создаём. Идемпотентно.
           NAME="${CF_PROJECT}.hackonvibe.com"
           DATA="{\"type\":\"CNAME\",\"name\":\"${CF_PROJECT}\",\"content\":\"${CF_PROJECT}.pages.dev\",\"proxied\":true}"
           REC=$(curl -s "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records?name=${NAME}" \
@@ -222,26 +261,32 @@ jobs:
           if [ -n "$ID" ]; then
             curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records/${ID}" \
               -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" --data "$DATA" \
-              | grep -q '"success":true' \
+              | grep -Eq '"success":[[:space:]]*true' \
               && echo "::notice::DNS обновлён -> ${CF_PROJECT}.pages.dev" \
               || echo "::warning::DNS update не прошёл (нет Zone:DNS:Edit?)"
           else
             curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/dns_records" \
               -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" --data "$DATA" \
-              | grep -q '"success":true' \
+              | grep -Eq '"success":[[:space:]]*true' \
               && echo "::notice::DNS CNAME создан -> ${NAME} (домен станет Active)" \
               || echo "::warning::DNS create не прошёл (нет Zone:DNS:Edit?)"
           fi
       # ── ЧЕСТНЫЙ сигнал ПО ФАКТУ: домен реально отдаёт сайт, а не честную страницу-ошибку? ──
       # Единственный источник правды — живой домен (не догадки CI). Красный ⇔ домен НЕ отдаёт настоящий сайт.
-      # Честно для ВСЕХ без per-case костылей: SSR-в-Docker (домен-туннель живой) → зелёный; статик/фреймворк
-      # с честной страницей на домене → красный. Поллим с ретраями (пропагация Pages ~до минуты).
+      # Честно для ВСЕХ без per-case костылей: SSR/Node с намеренной заглушкой на домене → зелёный (заглушка —
+      # ожидаемое содержимое); статик/фреймворк с честной страницей-ошибкой на домене → красный. Поллим с ретраями.
       - name: Verify the site is really live (fact — red if the domain serves the build-error page)
         if: steps.guard.outputs.ok == 'true'
+        env:
+          MODE: ${{ steps.detect.outputs.mode }}
         run: |
           DOMAIN="${CF_PROJECT}.hackonvibe.com"
           for i in $(seq 1 12); do
             BODY="$(curl -s --max-time 10 "https://${DOMAIN}/?cihb=${i}${RANDOM}" || true)"
+            if [ "$MODE" = "ssr" ] && printf '%s' "$BODY" | grep -q 'data-ssr-container-state="queued"'; then
+              echo "::notice::✓ SSR container provisioning queued: https://${DOMAIN}"
+              exit 0
+            fi
             if [ -n "$BODY" ] && ! printf '%s' "$BODY" | grep -q "Build did not produce a live site"; then
               echo "::notice::✓ живой сайт: https://${DOMAIN}"
               exit 0
