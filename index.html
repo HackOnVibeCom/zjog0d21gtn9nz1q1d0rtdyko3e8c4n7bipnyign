@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>HackOnVibe — how we host your project</title>
+<style>
+body{margin:0;min-height:100vh;background:#10051f;color:#fff8ff;font-family:Inter,system-ui,sans-serif;padding:2.5rem 1.25rem;line-height:1.65}
+main{max-width:52rem;margin:0 auto}
+h1{font-size:1.55rem;margin:0 0 .4rem;line-height:1.25}
+.sub{color:#c8b9d8;font-size:1.02rem;margin:0 0 1.8rem}
+h2{font-size:1.12rem;margin:2rem 0 .8rem}
+p{color:#e7dcf3;margin:0 0 1rem}
+a{color:#19f7ff;word-break:break-word}
+code{background:rgba(255,255,255,.08);padding:2px 7px;border-radius:6px;font-size:.92em}
+ul.builds{list-style:none;padding:0;margin:0 0 1rem;display:grid;gap:.7rem}
+ul.builds li{border:1px solid rgba(255,255,255,.14);background:rgba(19,9,34,.6);border-radius:12px;padding:.85rem 1rem}
+.bt{font-weight:800;font-size:1rem}
+.bt .em{font-size:1.15rem;margin-right:.35rem}
+.trig{color:#c8b9d8;font-size:.92rem;margin:.25rem 0 0}
+.trig b{color:#fff8ff}
+.note{border-radius:12px;padding:1rem 1.15rem;margin:1.4rem 0 0}
+.note.info{border:1px solid rgba(25,247,255,.4);background:rgba(25,247,255,.08)}
+.note.warn{border:1px solid rgba(255,77,97,.5);background:rgba(255,77,97,.12)}
+.note .nt{font-weight:800;margin:0 0 .35rem;display:flex;align-items:center;gap:.4rem}
+.note.warn .nt{color:#ff8a97}
+.foot{color:#9c8fb0;font-size:.86rem;margin:2rem 0 0;padding-top:1rem;border-top:1px solid rgba(255,255,255,.12)}
+</style>
+</head>
+<body><main>
+<h1>Welcome — this is your team's project repo</h1>
+<p class="sub">Your code lives here. Push to <code>main</code> and HackOnVibe builds &amp; hosts your <b>static</b> site automatically at your team subdomain — in about 2&ndash;5 minutes.</p>
+
+<h2>How hosting works</h2>
+<ul class="builds">
+  <li>
+    <div class="bt"><span class="em">🟢</span>Static site &mdash; we host it for you</div>
+    <p class="trig">A plain website (just <code>index.html</code> and files) <b>or</b> a static build (React/Vite/Astro, or Next.js with <code>output: 'export'</code>). Push to <code>main</code> &rarr; we run your build (if any) and publish it <a href="/">on your subdomain</a>. Nothing to configure.</p>
+  </li>
+  <li>
+    <div class="bt"><span class="em">🔵</span>Needs a live server? &mdash; deploy it yourself, keep the code here</div>
+    <p class="trig">If your project needs a running server (Next.js in SSR mode, a Node/Express backend, anything with an API at runtime), <b>we host static sites only</b> &mdash; deploy the server yourself on <b>Vercel</b> (or Render, Railway, Fly &mdash; wherever you like). Two things stay with us: <b>keep your code in THIS GitHub repo</b> (that's where the judges read it), and <b>paste your live URL</b> in your cabinet so judges open the right site.</p>
+  </li>
+</ul>
+
+<div class="note info">
+  <p class="nt">🔗 Where to add your live link</p>
+  <p style="margin:0">Deployed your server-side app elsewhere? Open <a href="https://hackonvibe.com/me">HackOnVibe.com/me</a>, go to your team section, and paste the link to your deployment there. That link is the site judges will review &mdash; keep it up to date.</p>
+</div>
+
+<div class="note warn">
+  <p class="nt">⚠️ Don't delete these &mdash; your static deploy needs them</p>
+  <p style="margin:0">Keep <code>.github/workflows/deploy.yml</code> (it's what puts your static site live) and, if your app has one, <code>package.json</code>. Removing them breaks the auto-deploy of your subdomain.</p>
+</div>
+
+<p class="foot">⏱️ After you push to <code>main</code>, your static site goes live in about <b>2&ndash;5 minutes</b>. Still not live after 5 &mdash; or hosting a server elsewhere and stuck? Tell the organizers on <a href="https://discord.gg/tU6NqSaS8">Discord</a>.</p>
+</main></body>
+</html>
