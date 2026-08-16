@@ -206,3 +206,45 @@ model GoogleAdsConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+/// Proof that a real Google Ads execution happened, kept for audit and for the
+/// judge-facing console.
+///
+/// Deliberately holds no credential of any kind: no access token, no refresh
+/// token, no developer token, no service-account key. Everything here is safe
+/// to show, because the campaign id and status came back from Google itself.
+model GoogleAdsExecution {
+  id            String   @id @default(cuid())
+  /// "app_campaign" today; the column keeps room for later execution types.
+  executionType String   @default("app_campaign")
+  /// customer_oauth | demo_service_account
+  mode          String
+  /// Owner of the run: a signed-in user, or a demo session.
+  userId        String?
+  demoSessionId String?
+  projectId     String?
+
+  provider                  String  @default("google_ads")
+  campaignId                String?
+  campaignResourceName      String?
+  campaignName              String?
+  campaignBudgetResourceName String?
+  status                    String?
+  channelType               String?
+  channelSubType            String?
+  appId                     String?
+  dailyBudgetMicros         Int?
+
+  /// pending | succeeded | failed
+  result       String    @default("pending")
+  /// A short, safe classification — never a provider message.
+  errorCode    String?
+  /// Sanitised timeline shown in the execution console (JSON array).
+  events       String?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  lastVerifiedAt DateTime?
+
+  @@index([demoSessionId])
+  @@index([userId])
+}
