@@ -76,7 +76,7 @@ export function DemoWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyNote, setVerifyNote] = useState<string | null>(null);
-  const [alreadyExecuted, setAlreadyExecuted] = useState(false);
+  const [recovering, setRecovering] = useState(false);
 
   const start = useCallback(async () => {
     setStarting(true);
@@ -156,23 +156,36 @@ export function DemoWorkspace() {
     }
   }, []);
 
+  /**
+   * Recover the campaign this session already owns.
+   *
+   * Reads our own records rather than asking to execute again — on a session
+   * that has not run yet, "execute" is a question that creates a campaign.
+   */
+  const recover = useCallback(async (): Promise<boolean> => {
+    const res = await fetch("/api/demo/status").catch(() => null);
+    if (!res) return false;
+    const data = await res.json().catch(() => ({}));
+    if (!data?.executed || !data.proof) return false;
+    setProof(data.proof as Proof);
+    setReused(true);
+    setError(null);
+    setPhase("done");
+    return true;
+  }, []);
+
   // A session started earlier in this browser may already own an execution.
-  // Detected with the read-only verify call — asking to execute would be the
-  // wrong question, because on a fresh session that question creates a campaign.
   useEffect(() => {
-    if (phase !== "workspace" || !configured) return;
+    if (phase !== "workspace") return;
     let cancelled = false;
     (async () => {
-      const res = await fetch("/api/demo/verify", { method: "POST" }).catch(() => null);
-      // A 404 simply means this session has not executed yet — the normal case.
-      if (!res || cancelled || res.status === 404) return;
-      const data = await res.json().catch(() => ({}));
-      if (!cancelled && data?.verified) setAlreadyExecuted(true);
+      if (cancelled) return;
+      await recover();
     })();
     return () => {
       cancelled = true;
     };
-  }, [phase, configured]);
+  }, [phase, recover]);
 
   return (
     <main className="page">
@@ -232,7 +245,30 @@ export function DemoWorkspace() {
                 is unavailable. Everything below is the same demo workspace a judge would see.
               </div>
             )}
-            {error && <div className="notice notice-error">{error}</div>}
+            {error && (
+              <div className="notice notice-error">
+                <span className="stack">
+                  <span>{error}</span>
+                  <span>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      disabled={recovering}
+                      onClick={async () => {
+                        setRecovering(true);
+                        const found = await recover();
+                        if (!found)
+                          setError(
+                            "No campaign was created for this session, so nothing was left behind. You can run the demo again."
+                          );
+                        setRecovering(false);
+                      }}
+                    >
+                      {recovering ? "Checking…" : "Check whether a campaign was created"}
+                    </button>
+                  </span>
+                </span>
+              </div>
+            )}
 
             <DemoAppWorkspace />
 
@@ -250,12 +286,6 @@ export function DemoWorkspace() {
                   server, not by this page.
                 </p>
 
-                {alreadyExecuted && (
-                  <div className="notice notice-info" style={{ marginTop: 14 }}>
-                    This browser has already run the demo. Opening the proof again shows that same
-                    campaign — it does not create a second one.
-                  </div>
-                )}
 
                 <div className="stack-lg" style={{ marginTop: 20 }}>
                   <div className="field">
@@ -323,16 +353,12 @@ export function DemoWorkspace() {
                           <span className="spinner spinner-dark" aria-hidden="true" /> Calling the
                           Google Ads API…
                         </>
-                      ) : alreadyExecuted ? (
-                        "Show my campaign proof"
                       ) : (
                         "Execute in Google Ads (test account)"
                       )}
                     </button>
                     <p className="t-meta" style={{ marginTop: 10, textAlign: "center" }}>
-                      {alreadyExecuted
-                        ? "Returns the campaign this browser already created."
-                        : "Creates one paused campaign. Nothing is published and no ads are served."}
+                      Creates one paused campaign. Nothing is published and no ads are served.
                     </p>
                   </div>
                 </div>

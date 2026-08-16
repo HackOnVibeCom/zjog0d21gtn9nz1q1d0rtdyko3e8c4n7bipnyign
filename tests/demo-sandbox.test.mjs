@@ -127,6 +127,57 @@ test("a repeat click returns the existing proof instead of creating another camp
   assert.equal(LIMITS.perSession, 1, "one execution per session");
 });
 
+test("two simultaneous clicks cannot both reach Google", () => {
+  const src = read("app/api/demo/execute/route.ts");
+  const handler = src.slice(src.indexOf("export async function POST"));
+  const claimAt = handler.indexOf("claimIsOurs(");
+  const executeAt = handler.indexOf("executeAppCampaign(");
+  assert.ok(claimAt >= 0, "the request claims the session's single slot");
+  assert.ok(claimAt < executeAt, "the claim is settled before Google is called");
+  assert.match(handler, /releaseClaim\(/, "the losing request gives its row back");
+
+  const session = read("lib/demo/session.ts");
+  assert.match(
+    session,
+    /orderBy: \[\{ startedAt: "asc" \}, \{ id: "asc" \}\]/,
+    "both requests must order candidates identically, or both could lose"
+  );
+});
+
+test("an execution that never finished stops blocking its session", () => {
+  const src = read("lib/demo/session.ts");
+  const block = src.slice(src.indexOf("export async function checkExecutionAllowed"));
+  assert.match(block, /result: "pending", startedAt: \{ gte:/, "stale pending rows are excluded");
+  assert.match(block, /result: "succeeded"/, "a finished execution still blocks forever");
+});
+
+test("recovering a proof asks our records, never Google", () => {
+  const src = read("app/api/demo/status/route.ts");
+  assert.doesNotMatch(src, /readBackCampaign|googleAds|fetch\(/, "no provider call on a page load");
+  assert.match(src, /existingExecution/);
+  assert.doesNotMatch(src, /result: "pending"/, "a pending row is not a proof");
+});
+
+test("the proof shape cannot carry an account identity to the browser", async () => {
+  const { toProof } = await import("../.tmp-test/demo/proof.js");
+  const shaped = toProof({
+    campaignId: "1",
+    campaignName: "n",
+    status: "PAUSED",
+    channelType: "MULTI_CHANNEL",
+    channelSubType: "APP_CAMPAIGN",
+    appId: "com.example.app",
+    dailyBudgetMicros: 3_000_000,
+    events: "not json",
+    completedAt: null,
+    lastVerifiedAt: null,
+  });
+  for (const forbidden of ["customerId", "campaignResourceName", "campaignBudgetResourceName"]) {
+    assert.ok(!(forbidden in shaped), `${forbidden} must not be in the browser shape`);
+  }
+  assert.deepEqual(shaped.events, [], "unreadable stored events degrade to none, not to a crash");
+});
+
 test("limits are enforced in the database, not in process memory", () => {
   const src = read("lib/demo/session.ts");
   assert.match(src, /prisma\.googleAdsExecution\.count/);

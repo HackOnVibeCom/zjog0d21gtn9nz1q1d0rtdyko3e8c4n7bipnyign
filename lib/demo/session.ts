@@ -15,6 +15,16 @@ import { prisma } from "../prisma";
 export const DEMO_COOKIE = "agk_demo";
 const SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How long a started-but-unfinished execution keeps blocking its session.
+ *
+ * The row is written before Google is called, so a lost connection or a killed
+ * function can leave it pending forever. Counting those indefinitely would lock
+ * a visitor out of the demo over a failure that was ours; ignoring them at once
+ * would let a double click through. A short grace does both jobs.
+ */
+const PENDING_GRACE_MS = 3 * 60 * 1000;
+
 /** Limits. Kept here so the policy is one readable block, not scattered. */
 export const LIMITS = {
   /** Executions any one session may ever produce. */
@@ -92,7 +102,13 @@ export async function checkExecutionAllowed(
   hash: string | null
 ): Promise<LimitVerdict> {
   const existing = await prisma.googleAdsExecution.count({
-    where: { demoSessionId: sessionId, result: { in: ["succeeded", "pending"] } },
+    where: {
+      demoSessionId: sessionId,
+      OR: [
+        { result: "succeeded" },
+        { result: "pending", startedAt: { gte: new Date(Date.now() - PENDING_GRACE_MS) } },
+      ],
+    },
   });
   if (existing >= LIMITS.perSession) return { allowed: false, reason: "session_used" };
 
@@ -124,4 +140,28 @@ export async function existingExecution(sessionId: string) {
     where: { demoSessionId: sessionId, result: "succeeded" },
     orderBy: { startedAt: "desc" },
   });
+}
+
+/**
+ * Is this row the session's one execution?
+ *
+ * The allowance check and the row that follows it are two statements, and two
+ * clicks landing between them would both be allowed. Rather than trust the gap,
+ * each request writes its row and then asks who came first; the loser deletes
+ * its own row and calls no API. Both requests order the same way, so exactly one
+ * of them proceeds.
+ */
+export async function claimIsOurs(sessionId: string, rowId: string): Promise<boolean> {
+  const rows = await prisma.googleAdsExecution.findMany({
+    where: { demoSessionId: sessionId, result: { in: ["succeeded", "pending"] } },
+    orderBy: [{ startedAt: "asc" }, { id: "asc" }],
+    select: { id: true },
+    take: 2,
+  });
+  return rows[0]?.id === rowId;
+}
+
+/** Release a row this request is not allowed to use. */
+export async function releaseClaim(rowId: string): Promise<void> {
+  await prisma.googleAdsExecution.delete({ where: { id: rowId } }).catch(() => {});
 }

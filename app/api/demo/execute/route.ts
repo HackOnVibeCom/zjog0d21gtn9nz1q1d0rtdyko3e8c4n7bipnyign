@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { DemoServiceAccountAuthProvider, demoModeConfigured } from "@/lib/googleAds/auth";
-import { executeAppCampaign, type ExecutionEvent } from "@/lib/googleAds/execution";
+import { executeAppCampaign } from "@/lib/googleAds/execution";
 import { planGrowth } from "@/lib/demo/autopilot";
+import { toProof } from "@/lib/demo/proof";
 import { DEMO_APP_ID, DEMO_MAX_DAILY_BUDGET_MICROS } from "@/lib/demo/workspace";
 import {
   checkExecutionAllowed,
+  claimIsOurs,
   clientHash,
   DEMO_COOKIE,
   existingExecution,
   getSession,
   readSessionId,
+  releaseClaim,
 } from "@/lib/demo/session";
 
 export const runtime = "nodejs";
@@ -28,40 +31,6 @@ export const maxDuration = 60;
  * a request body can influence only the goal, the market and a budget that is
  * clamped before it is used.
  */
-
-/** A stored execution, shaped for the browser. Never carries a customer id. */
-function toProof(row: {
-  campaignId: string | null;
-  campaignName: string | null;
-  status: string | null;
-  channelType: string | null;
-  channelSubType: string | null;
-  appId: string | null;
-  dailyBudgetMicros: number | null;
-  events: string | null;
-  completedAt: Date | null;
-  lastVerifiedAt: Date | null;
-}) {
-  let events: ExecutionEvent[] = [];
-  try {
-    events = row.events ? (JSON.parse(row.events) as ExecutionEvent[]) : [];
-  } catch {
-    events = [];
-  }
-  return {
-    campaignId: row.campaignId,
-    campaignName: row.campaignName,
-    status: row.status,
-    channelType: row.channelType,
-    channelSubType: row.channelSubType,
-    appId: row.appId,
-    dailyBudgetMicros: row.dailyBudgetMicros,
-    verifiedByReadBack: true,
-    completedAt: row.completedAt?.toISOString() ?? null,
-    lastVerifiedAt: row.lastVerifiedAt?.toISOString() ?? null,
-    events,
-  };
-}
 
 export async function POST(req: NextRequest) {
   const sessionId = readSessionId(req.cookies.get(DEMO_COOKIE)?.value);
@@ -123,6 +92,17 @@ export async function POST(req: NextRequest) {
       appId: DEMO_APP_ID,
     },
   });
+
+  // Two clicks can pass the check above before either writes its row. The row
+  // is the claim; whoever wrote the first one keeps it, and the other stops
+  // here without calling Google.
+  if (!(await claimIsOurs(session.id, started.id))) {
+    await releaseClaim(started.id);
+    return NextResponse.json(
+      { error: "An execution for this session is already running.", code: "already_running" },
+      { status: 409 }
+    );
+  }
 
   try {
     const { proof, events } = await executeAppCampaign(
