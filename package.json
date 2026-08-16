@@ -1,0 +1,34 @@
+{
+  "name": "aigrowthkit",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "db:deploy": "prisma migrate deploy",
+    "pretest": "tsc lib/store/types.ts lib/store/googleplay.ts lib/store/index.ts lib/store/ticket.ts lib/analyze.ts lib/openai.ts lib/slug.ts lib/activity.ts lib/signed.ts lib/googleAds/config.ts lib/googleAds/crypto.ts lib/googleAds/oauth.ts lib/googleAds/client.ts lib/discovery/types.ts lib/discovery/web.ts lib/discovery/actionability.ts lib/discovery/quality.ts lib/discovery/presentation.ts lib/discovery/queries.ts lib/discovery/webscore.ts lib/discovery/webflow.ts lib/discovery/demo.ts --rootDir lib --outDir .tmp-test --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck",
+    "test": "node --test tests/store.test.mjs tests/analyze.test.mjs tests/discovery.test.mjs tests/activity.test.mjs tests/project-routes.test.mjs tests/navigation.test.mjs tests/google-ads.test.mjs tests/google-ads-hierarchy.test.mjs"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.11.3",
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "next": "16.3.0",
+    "next-auth": "^5.0.0-beta.32",
+    "prisma": "^6.19.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.0",
+    "typescript": "^5"
+  }
+}
