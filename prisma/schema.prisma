@@ -248,3 +248,23 @@ model GoogleAdsExecution {
   @@index([demoSessionId])
   @@index([userId])
 }
+
+/// A judge's isolated demo session.
+///
+/// Deliberately NOT an Auth.js session: it grants no account, sees no customer
+/// project and carries no identity. It exists to scope one public sandbox run
+/// and to make that run idempotent, so a public button cannot be turned into a
+/// campaign generator.
+model DemoSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  /// Salted hash of client address + user agent, for rate limiting only.
+  /// The raw address is never stored.
+  clientHash String?
+  /// The single execution this session is allowed to produce.
+  executionId String?
+
+  @@index([clientHash, createdAt])
+  @@index([createdAt])
+}
