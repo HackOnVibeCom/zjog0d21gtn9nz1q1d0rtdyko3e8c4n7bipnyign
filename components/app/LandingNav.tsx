@@ -25,6 +25,9 @@ export function LandingNav() {
           <Link href={HOW_IT_WORKS_HREF} className="nav-link">
             How it works
           </Link>
+          <Link href="/demo" className="nav-link">
+            Live demo
+          </Link>
           {authed ? (
             <Link href="/app" className="nav-link">
               Dashboard
@@ -56,8 +59,8 @@ export function LandingCta({ compact = false }: { compact?: boolean }) {
           <Link href="/app" className={`btn btn-primary${size}`}>
             Go to dashboard
           </Link>
-          <Link href="/app" className={`btn btn-secondary${size}`}>
-            Add another app
+          <Link href="/demo" className={`btn btn-secondary${size}`}>
+            Try the live demo
           </Link>
         </div>
         {!compact && (
@@ -76,14 +79,14 @@ export function LandingCta({ compact = false }: { compact?: boolean }) {
           {compact ? "Start with your app link" : "Analyse my app"}
         </Link>
         {!compact && (
-          <Link href="/login" className={`btn btn-secondary${size}`}>
-            Log in
+          <Link href="/demo" className={`btn btn-secondary${size}`}>
+            Try the live demo
           </Link>
         )}
       </div>
       {!compact && (
         <p className="t-meta" style={{ marginTop: 14 }}>
-          Free while in early access · no card required
+          Free while in early access · no card required · the demo needs no account
         </p>
       )}
     </>

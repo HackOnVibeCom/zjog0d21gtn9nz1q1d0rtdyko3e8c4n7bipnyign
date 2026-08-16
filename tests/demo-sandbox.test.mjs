@@ -170,6 +170,60 @@ test("demo content is labelled and carries no invented metrics", () => {
   }
 });
 
+// ------------------------------------------------------------- public claims
+
+/** Everything a visitor can read before, during and after an execution. */
+const PUBLIC_COPY = [
+  "app/page.tsx",
+  "app/demo/page.tsx",
+  "components/app/DemoWorkspace.tsx",
+  "components/app/LandingNav.tsx",
+];
+
+test("the public copy never claims the campaign serves, launches or acquires", () => {
+  // A paused campaign with no ad group and no creatives advertises nothing. The
+  // demo may say a real resource exists; it may never imply it is working.
+  const forbidden = [
+    "campaign is live",
+    "campaign went live",
+    "now live",
+    "is serving",
+    "are serving",
+    "ads are running",
+    "campaign launched",
+    "launch your campaign",
+    "acquiring users",
+    "users acquired",
+    "getting installs",
+    "driving installs",
+  ];
+  for (const file of PUBLIC_COPY) {
+    const copy = read(file).toLowerCase();
+    for (const claim of forbidden) {
+      assert.ok(!copy.includes(claim), `${file} must not claim "${claim}"`);
+    }
+  }
+});
+
+test("the demo states the limits of what it proves, in the visitor's words", () => {
+  const copy = read("components/app/DemoWorkspace.tsx");
+  assert.match(copy, /PAUSED/, "the paused status is stated");
+  assert.match(copy, /test account/i, "the isolated test account is stated");
+  assert.match(copy, /no ad group/i, "the missing ad group is disclosed");
+  assert.match(copy, /spends nothing|cannot spend/i, "the absence of spend is stated");
+  assert.match(copy, /What this is, and what it is not/, "the scope card is present");
+});
+
+test("the demo page cannot reach an account or a customer project", () => {
+  const page = read("app/demo/page.tsx");
+  const view = read("components/app/DemoWorkspace.tsx");
+  assert.doesNotMatch(page, /currentUserId|ownedProjectOr|prisma/, "no owner data on the demo route");
+  assert.doesNotMatch(view, /\/api\/projects/, "the demo view calls only demo endpoints");
+  for (const call of view.match(/fetch\("([^"]+)"/g) ?? []) {
+    assert.match(call, /\/api\/demo\//, `the demo view may only call demo endpoints: ${call}`);
+  }
+});
+
 test("the sandbox app id is a real package id, not a placeholder", () => {
   assert.match(DEMO_APP_ID, /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/i);
   assert.ok(!/example|test\.app|dummy|fake/i.test(DEMO_APP_ID));

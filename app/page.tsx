@@ -84,6 +84,27 @@ export default function Landing() {
           </div>
         </section>
 
+        <section aria-labelledby="demo-heading" style={{ marginTop: 64 }}>
+          <div className="card card-lg card-accent">
+            <span className="badge badge-accent">No account needed</span>
+            <h2 id="demo-heading" className="t-h2" style={{ marginTop: 14 }}>
+              It doesn&apos;t only advise. Watch it execute.
+            </h2>
+            <p className="t-body" style={{ marginTop: 10, maxWidth: 640 }}>
+              Approve a daily budget and the product creates a real Google Ads App Campaign through
+              the Google Ads API — paused, in an isolated test account — then asks Google to confirm
+              it while you watch. A test account serves no ads and spends nothing, and the campaign
+              carries no ad creatives, so nothing is shown to anyone.
+            </p>
+            <div className="row-wrap" style={{ marginTop: 22 }}>
+              <Link href="/demo" className="btn btn-primary">
+                Try the live demo
+              </Link>
+              <span className="t-meta">One execution per visitor</span>
+            </div>
+          </div>
+        </section>
+
         <section aria-labelledby="principles-heading" style={{ marginTop: 64 }}>
           <div className="section-head">
             <div>
