@@ -1,0 +1,208 @@
+// AI Growth Kit — data model for the PROMOTE → PUBLISH → MEASURE vertical slice.
+// SQLite in dev; swap `provider` to "postgresql" for production (Prisma handles it).
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  // Production: PostgreSQL (e.g. Neon). Portable to any PostgreSQL provider.
+  // url       = pooled connection (used by the app at runtime).
+  // directUrl = direct connection (used by prisma migrate). With Neon, DIRECT_URL
+  //             may equal DATABASE_URL if you are not using the pooler.
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// An application the customer wants to promote.
+model Project {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  storeUrl       String?
+  websiteUrl     String?
+  targetAudience String?
+  createdAt      DateTime  @default(now())
+  /// Last time the OWNER did deliberate growth work here (see lib/activity.ts).
+  /// Deliberately not touched by analytics polling or by visitors' clicks.
+  lastActivityAt DateTime  @default(now())
+  /// Set when the owner files the project away by hand. A manual decision, so
+  /// it is only undone by an explicit Restore — never by opening the project.
+  archivedAt     DateTime?
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  analysis    Analysis?
+  campaigns   Campaign[]
+  communities CommunityCandidate[]
+}
+
+// --- Auth / multi-tenant (Auth.js Prisma models + password credentials) ------
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+
+  accounts Account[]
+  sessions Session[]
+  projects Project[]
+
+  googleAdsConnection GoogleAdsConnection?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// A discovered EXTERNAL community where the app's audience may already gather.
+/// Distinct from owned distribution — member counts are REAL (fetched from the
+/// platform); audience fit and promotion policy are AI inference over real data.
+model CommunityCandidate {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  platform          String   // reddit|discord|...
+  name              String
+  url               String
+  description       String?
+  memberCount       Int?     // REAL, from the platform (null = unknown)
+  rules             String?  // JSON array of REAL community rules
+  audienceFit       Int      @default(0)         // AI 0-100
+  relevanceReason   String?                       // AI
+  promotionPolicy   String   @default("unknown") // allowed|restricted|requires_permission|prohibited|unknown (AI over real rules)
+  policyEvidence    String?                       // which rule drove the classification
+  suggestedApproach String   @default("do_not_post")
+  generatedContent  String?                       // community-specific post (AI)
+  trackingLinkId    String?
+  createdAt         DateTime @default(now())
+}
+
+/// The AI's understanding of the app + which channels fit it. One per project.
+model Analysis {
+  id                  String   @id @default(cuid())
+  projectId           String   @unique
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  primaryCategory     String
+  secondaryCategories String   // JSON array
+  audience            String?
+  valueProp           String?
+  recommendedChannels String   // JSON: [{platform, priority, why, format, angle}]
+  raw                 String   // full JSON returned by the model, for auditing
+  createdAt           DateTime @default(now())
+}
+
+/// A promotion campaign for a project (one launch = one campaign).
+model Campaign {
+  id           String        @id @default(cuid())
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  goal         String        @default("downloads")
+  status       String        @default("draft") // draft|ready|publishing|active|completed|failed
+  createdAt    DateTime      @default(now())
+  startedAt    DateTime?
+
+  publications Publication[]
+  trackingLinks TrackingLink[]
+}
+
+/// A single real publication to one platform.
+model Publication {
+  id             String    @id @default(cuid())
+  campaignId     String
+  campaign       Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platform       String    // discord|reddit|...
+  content        String    // JSON: platform-specific generated content
+  status         String    @default("draft") // draft|queued|publishing|published|failed|requires_user_action
+  externalPostId String?
+  externalPostUrl String?
+  trackingLinkId String?
+  error          String?
+  publishedAt    DateTime?
+  createdAt      DateTime  @default(now())
+}
+
+/// A first-party trackable short link that redirects to the app's store/site.
+model TrackingLink {
+  id             String          @id @default(cuid())
+  slug           String          @unique
+  campaignId     String
+  campaign       Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  platform       String
+  destinationUrl String
+  createdAt      DateTime        @default(now())
+
+  events         TrackingEvent[]
+}
+
+/// One recorded click on a tracking link (real attribution).
+model TrackingEvent {
+  id             String       @id @default(cuid())
+  trackingLinkId String
+  trackingLink   TrackingLink @relation(fields: [trackingLinkId], references: [id], onDelete: Cascade)
+  referrer       String?
+  userAgent      String?
+  createdAt      DateTime     @default(now())
+}
+
+/// A customer-authorized Google Ads connection.
+///
+/// Deliberately separate from the Auth.js `Account` model: that one is login
+/// identity and stores tokens in plaintext columns. This is permission to
+/// operate someone's advertising, so the refresh credential is held as
+/// AES-256-GCM ciphertext and is only ever opened server-side.
+///
+/// One authorization per user for now; it can already reach several
+/// advertising accounts, and `selectedCustomerId` records which one is in use.
+model GoogleAdsConnection {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Refresh token, encrypted. Never stored or logged in plaintext.
+  refreshTokenCipher String
+  refreshTokenIv     String
+  refreshTokenTag    String
+
+  /// The advertising account currently in use, and the manager it sits under.
+  selectedCustomerId String?
+  managerCustomerId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
