@@ -31,9 +31,25 @@ type ServiceAccountEnv = { email: string; privateKey: string };
 /**
  * Netlify (and most dashboards) store multi-line values with escaped newlines,
  * so a PEM arrives as a single line containing "\n". Restore it before use.
+ *
+ * Done unconditionally and with split/join rather than a detection gate: an
+ * earlier version only converted when it believed escapes were present, and
+ * when that probe was wrong the key stayed on one line and OpenSSL rejected it
+ * as unsupported — a correct credential failing for a reason that pointed
+ * nowhere near the cause. A value with real newlines is unaffected by this.
  */
+const ESCAPED_NEWLINE = String.fromCharCode(92) + "n";
+const ESCAPED_CRLF = String.fromCharCode(92) + "r" + ESCAPED_NEWLINE;
+
 function normalizePrivateKey(raw: string): string {
-  return raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw;
+  return raw
+    .split(ESCAPED_CRLF)
+    .join("\n")
+    .split(ESCAPED_NEWLINE)
+    .join("\n")
+    .split("\r\n")
+    .join("\n")
+    .trim();
 }
 
 function serviceAccountEnv(): ServiceAccountEnv | null {

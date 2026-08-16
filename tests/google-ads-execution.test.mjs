@@ -307,5 +307,74 @@ test("the service account never returns a durable credential", () => {
   assert.match(src, /demoServiceAccountToken/);
   assert.ok(!/return sa\.privateKey/.test(src), "the private key is never returned");
   assert.match(src, /GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY/);
-  assert.match(src, /replace\(\/\\\\n\/g, "\\n"\)/, "escaped newlines are normalised");
+  // Normalisation is asserted by behaviour below, not by matching one
+  // technique — pinning the exact expression is what let a broken detection
+  // gate pass its own test.
+  assert.match(src, /normalizePrivateKey/);
+});
+
+// ------------------------------------------------- service-account key shape
+
+test("a PEM stored with escaped newlines still signs", async () => {
+  // Regression: an earlier normalizer only converted escapes when a detection
+  // probe said they were present. When that probe was wrong the key stayed on
+  // one line and OpenSSL rejected a perfectly valid credential as unsupported
+  // — a real failure that pointed nowhere near its cause.
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+
+  const saved = {
+    email: process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY,
+  };
+  process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_EMAIL = "demo@example.iam.gserviceaccount.com";
+  // Exactly how a dashboard stores it: one line, newlines escaped.
+  process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY = privateKey.replace(/\n/g, "\n");
+
+  const { demoServiceAccountToken, demoServiceAccountConfigured } = await import(
+    "../.tmp-test/googleAds/serviceAccount.js"
+  );
+  try {
+    assert.equal(demoServiceAccountConfigured(), true, "an escaped PEM must be accepted");
+
+    let assertionSent = null;
+    globalThis.fetch = async (_url, init) => {
+      assertionSent = new URLSearchParams(init.body).get("assertion");
+      return { ok: true, status: 200, json: async () => ({ access_token: "ya29.stub" }) };
+    };
+
+    const token = await demoServiceAccountToken();
+    assert.equal(token, "ya29.stub", "signing succeeded, so a token was exchanged");
+    assert.equal(assertionSent.split(".").length, 3, "a signed JWT was sent");
+    assert.ok(!assertionSent.includes("PRIVATE KEY"), "the key itself is never transmitted");
+  } finally {
+    process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_EMAIL = saved.email;
+    process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY = saved.key;
+  }
+});
+
+test("a PEM with real newlines is unaffected by normalisation", async () => {
+  const { generateKeyPairSync } = await import("node:crypto");
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  const saved = process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY;
+  const savedEmail = process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_EMAIL;
+  process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_EMAIL = "demo@example.iam.gserviceaccount.com";
+  process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY = privateKey;
+
+  const { demoServiceAccountToken } = await import("../.tmp-test/googleAds/serviceAccount.js");
+  try {
+    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ access_token: "ya29.stub2" }) });
+    assert.equal(await demoServiceAccountToken(), "ya29.stub2");
+  } finally {
+    process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_PRIVATE_KEY = saved;
+    process.env.GOOGLE_ADS_DEMO_SERVICE_ACCOUNT_EMAIL = savedEmail;
+  }
 });
