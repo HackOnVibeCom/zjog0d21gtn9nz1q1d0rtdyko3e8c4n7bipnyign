@@ -7,6 +7,7 @@ import { Badge, Chip, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { ProgressSteps, type Step } from "@/components/ui/ProgressSteps";
+import { ProjectAutopilot } from "@/components/app/ProjectAutopilot";
 import {
   groupCandidates,
   isLowConfidence,
@@ -744,15 +745,29 @@ export default function ProjectDashboard() {
           <div>
             <span className="t-label">Step 3 · Discover</span>
             <h2 id="discover" className="t-h2">
-              Where your audience already gathers
+              Reach the people who need this app
             </h2>
             <p className="t-small" style={{ marginTop: 4, maxWidth: 660 }}>
-              {isDemoData
-                ? "Fictional sample communities for demonstrating the discovery workflow — nothing below was retrieved from a real source."
-                : "Searches the public web for discussions by the people who have your problem — judged on who is actually talking, not on matching words. Nothing is posted anywhere."}
+              Two ways to reach them, both starting from the analysis above: a real Google Ads test
+              campaign for this app, and the public discussions where these people already gather.
             </p>
           </div>
         </div>
+
+        {/* Block 1 — Google Ads live demo, first inside Step 3. */}
+        <ProjectAutopilot projectId={id} appName={project.name} />
+
+        {/* Block 2 — the existing audience discovery, unchanged in behaviour. */}
+        <article className="card" style={{ marginTop: 20 }} aria-labelledby="audience">
+        <span className="t-label">Audience discovery</span>
+        <h3 id="audience" className="t-h3" style={{ marginTop: 4 }}>
+          Where your audience already gathers
+        </h3>
+        <p className="t-small" style={{ marginTop: 8, maxWidth: 660, marginBottom: 16 }}>
+          {isDemoData
+            ? "Fictional sample communities for demonstrating the discovery workflow — nothing below was retrieved from a real source."
+            : "Searches the public web for discussions by the people who have your problem — judged on who is actually talking, not on matching words. Nothing is posted anywhere."}
+        </p>
 
         <div className="row-wrap" style={{ marginTop: 4 }}>
           {resumable ? (
@@ -902,6 +917,7 @@ export default function ProjectDashboard() {
             Reddit provider: {providerMsg}
           </p>
         )}
+        </article>
       </section>
 
       {/* ---------------------------------------------------------- MEASURE */}

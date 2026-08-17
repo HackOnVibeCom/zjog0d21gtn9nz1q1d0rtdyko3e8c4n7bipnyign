@@ -58,14 +58,38 @@ export type ExecutionRequest = {
   locationIds?: string[];
 };
 
+/**
+ * How far a failed run actually got.
+ *
+ * This is the difference between "nothing was created" and "something may
+ * exist", and it must never be guessed from a provider error code — a timeout
+ * looks identical whether the campaign was created or not. It is therefore
+ * recorded from the run's own progress: the stage advances only where the code
+ * actually advances.
+ */
+export type ExecutionStage =
+  /** The campaign mutate was never sent, so Google created no campaign. */
+  | "before_campaign_mutation"
+  /** The mutate was sent and no answer was received. It may have landed. */
+  | "campaign_mutation_unconfirmed"
+  /** Google returned a campaign. It exists regardless of what failed next. */
+  | "campaign_created";
+
 export class ExecutionError extends Error {
   code: string;
   events: ExecutionEvent[];
-  constructor(code: string, message: string, events: ExecutionEvent[]) {
+  stage: ExecutionStage;
+  constructor(
+    code: string,
+    message: string,
+    events: ExecutionEvent[],
+    stage: ExecutionStage = "before_campaign_mutation"
+  ) {
     super(message);
     this.name = "ExecutionError";
     this.code = code;
     this.events = events;
+    this.stage = stage;
   }
 }
 
@@ -195,6 +219,27 @@ export async function executeAppCampaign(
     throw new ExecutionError("not_configured", "Google Ads is not configured", events);
   }
 
+  // Advances only where the code advances, so a failure can say truthfully
+  // whether Google may be holding a campaign for this run.
+  let stage: ExecutionStage = "before_campaign_mutation";
+  // The original error is rethrown untouched apart from the stage: its message
+  // and its type are what every existing caller already handles.
+  const fail = (e: unknown): never => {
+    if (e && typeof e === "object") {
+      const carrier = e as { stage?: ExecutionStage; events?: ExecutionEvent[] };
+      carrier.stage = stage;
+      carrier.events ??= events;
+    }
+    throw e;
+  };
+
+  try {
+    return await run(env);
+  } catch (e) {
+    return fail(e);
+  }
+
+  async function run(env: NonNullable<ReturnType<typeof googleAdsEnv>>) {
   const accessToken = await auth.accessToken();
   const customerId = normalizeCustomerId(await auth.targetCustomerId());
   const loginCustomerId = auth.loginCustomerId();
@@ -253,6 +298,8 @@ export async function executeAppCampaign(
   });
 
   push({ code: "CAMPAIGN_CREATE_STARTED", label: "Creating PAUSED App Campaign", status: "running" });
+  // From here on a campaign may exist even if the next line never returns.
+  stage = "campaign_mutation_unconfirmed";
   const campaign = await call<MutateResponse>(
     `${base}/campaigns:mutate`,
     accessToken,
@@ -283,6 +330,7 @@ export async function executeAppCampaign(
     }
   );
   const campaignResourceName = resourceNameOf(campaign);
+  stage = "campaign_created";
   push({
     code: "CAMPAIGN_CREATED",
     label: "Google returned a campaign resource",
@@ -300,10 +348,57 @@ export async function executeAppCampaign(
   });
 
   return { proof, events };
+  }
 }
 
 function testAccountOnlyRequired(options: { testAccountOnly: boolean }): boolean {
   return options.testAccountOnly;
+}
+
+/**
+ * Find a campaign Google may already hold under our own execution reference.
+ *
+ * A process can die between Google creating a campaign and us writing down its
+ * identity, which leaves a row that cannot be told apart from an attempt that
+ * never reached Google. Because every execution puts its row id into the
+ * campaign name before the mutate, that ambiguity is answerable: ask Google
+ * whether a campaign carrying this reference exists.
+ *
+ * Read-only, and deliberately strict about the reference format — the value is
+ * interpolated into a query, so anything that is not a plain id is refused
+ * rather than escaped.
+ */
+export async function findCampaignByReference(
+  auth: GoogleAdsAuthProvider,
+  accessToken: string,
+  customerId: string,
+  reference: string
+): Promise<string | null> {
+  const env = googleAdsEnv();
+  if (!env) throw new GoogleAdsApiError("forbidden", "Google Ads is not configured");
+  if (!/^[A-Za-z0-9_-]{6,64}$/.test(reference)) {
+    throw new GoogleAdsApiError("forbidden", "Execution reference is not usable");
+  }
+
+  const data = await call<{ results?: Array<{ campaign?: { resourceName?: unknown } }> }>(
+    `${GOOGLE_ADS_BASE_URL}/customers/${normalizeCustomerId(customerId)}/googleAds:search`,
+    accessToken,
+    env.developerToken,
+    auth.loginCustomerId(),
+    {
+      query:
+        "SELECT campaign.resource_name, campaign.name FROM campaign " +
+        `WHERE campaign.name LIKE '%${referenceMarker(reference)}%' LIMIT 1`,
+    }
+  );
+
+  const resourceName = data.results?.[0]?.campaign?.resourceName;
+  return typeof resourceName === "string" && resourceName.trim() !== "" ? resourceName.trim() : null;
+}
+
+/** The token written into a campaign name so an interrupted run can be found. */
+export function referenceMarker(reference: string): string {
+  return `ref:${reference}`;
 }
 
 /**
