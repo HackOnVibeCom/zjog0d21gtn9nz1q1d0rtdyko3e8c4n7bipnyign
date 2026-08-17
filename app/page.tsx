@@ -51,12 +51,12 @@ export default function Landing() {
       <main className="page">
         <section className="hero animate-in">
           <span className="badge badge-warning">Early access · in development</span>
-          <h1 className="t-display" style={{ marginTop: 20, maxWidth: 880, marginInline: "auto" }}>
+          <h1 className="t-display" style={{ marginTop: 18, maxWidth: 760, marginInline: "auto" }}>
             Turn one app link into a
             <br />
             practical growth plan
           </h1>
-          <p className="t-lead" style={{ maxWidth: 620, margin: "20px auto 0" }}>
+          <p className="t-lead" style={{ maxWidth: 600, margin: "18px auto 0" }}>
             AI Growth Kit reads your Google Play listing, works out who your users are, finds the
             public discussions where they already gather, and counts every click you earn.
           </p>
