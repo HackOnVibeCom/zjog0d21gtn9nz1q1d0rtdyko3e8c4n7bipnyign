@@ -4,7 +4,12 @@ import { DemoServiceAccountAuthProvider, demoModeConfigured } from "@/lib/google
 import { executeAppCampaign } from "@/lib/googleAds/execution";
 import { planGrowth } from "@/lib/demo/autopilot";
 import { toProof } from "@/lib/demo/proof";
-import { DEMO_APP_ID, DEMO_MAX_DAILY_BUDGET_MICROS } from "@/lib/demo/workspace";
+import { DEMO_MAX_DAILY_BUDGET_MICROS } from "@/lib/demo/workspace";
+import {
+  currentRun,
+  DEMO_LIMITS,
+  googleExecutionEnabled,
+} from "@/lib/demo/run";
 import {
   checkExecutionAllowed,
   claimIsOurs,
@@ -45,11 +50,59 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Idempotent by design: a second click returns the campaign this session
-  // already created rather than creating another one.
+  // A public mutation can be switched off without a deploy. It can only ever
+  // subtract permission — the TEST-account guard lives in the engine and is
+  // never reachable from here.
+  if (!googleExecutionEnabled()) {
+    return NextResponse.json(
+      { error: "Live Google Ads execution is paused on this deployment.", code: "execution_disabled" },
+      { status: 503 }
+    );
+  }
+
+  // The app comes from the judge's own research run, never from a fixed
+  // example and never from the request body.
+  const run = await currentRun(session.id);
+  if (!run || run.stage !== "proposed") {
+    return NextResponse.json(
+      { error: "Run the research first — there is no campaign proposal to execute.", code: "no_proposal" },
+      { status: 409 }
+    );
+  }
+  const appId = run.appId;
+
   const already = await existingExecution(session.id);
   if (already) {
-    return NextResponse.json({ reused: true, proof: toProof(already) });
+    // A repeat click on the run that produced it gets its own campaign back.
+    if (run.executionId === already.id) {
+      return NextResponse.json({ reused: true, proof: toProof(already) });
+    }
+    // A different run must never receive another run's campaign as its result.
+    // One execution per session, and the older proof stays with its own app.
+    return NextResponse.json(
+      {
+        error:
+          "This demo session has already used its one Google Ads TEST execution. The earlier campaign belongs to the app it was created for.",
+        code: "session_execution_used",
+        executedAppId: already.appId,
+      },
+      { status: 429 }
+    );
+  }
+
+  // Persistent global ceiling. Serverless instances share no memory, so the
+  // count comes from the execution table rather than from this process.
+  const globalRecent = await prisma.googleAdsExecution.count({
+    where: {
+      mode: "demo_service_account",
+      startedAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+  });
+  if (globalRecent >= DEMO_LIMITS.globalGoogleExecutionsPerHour) {
+    return NextResponse.json(
+      { error: "The public demo has reached its hourly execution limit. Please try again later.", code: "global_cap" },
+      { status: 429 }
+    );
   }
 
   const hash = clientHash(
@@ -89,7 +142,7 @@ export async function POST(req: NextRequest) {
       demoSessionId: session.id,
       result: "pending",
       dailyBudgetMicros: plan.dailyBudgetMicros,
-      appId: DEMO_APP_ID,
+      appId,
     },
   });
 
@@ -108,8 +161,8 @@ export async function POST(req: NextRequest) {
     const { proof, events } = await executeAppCampaign(
       new DemoServiceAccountAuthProvider(),
       {
-        campaignName: `AI Growth Kit demo · ${plan.marketLabel} installs`,
-        appId: DEMO_APP_ID,
+        campaignName: `${appId} · ${plan.marketLabel} installs`,
+        appId,
         requestedDailyBudgetMicros: plan.dailyBudgetMicros,
       },
       // testAccountOnly is not negotiable on this path.
@@ -145,6 +198,9 @@ export async function POST(req: NextRequest) {
       where: { id: session.id },
       data: { executionId: saved.id },
     });
+    // The proof belongs to the run that proposed it. A later run researching a
+    // different app must never be able to show this campaign as its own.
+    await prisma.demoRun.update({ where: { id: run.id }, data: { executionId: saved.id } });
 
     return NextResponse.json({ reused: false, plan, proof: toProof(saved) });
   } catch (e) {

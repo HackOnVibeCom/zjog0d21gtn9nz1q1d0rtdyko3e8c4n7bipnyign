@@ -1,652 +1,791 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Badge, Chip } from "@/components/ui/Badge";
-import {
-  BUDGET_CHOICES,
-  DEMO_APP,
-  DISCOVER,
-  MARKETS,
-  PROMOTE,
-  UNDERSTAND,
-} from "@/lib/demo/workspace";
 
 /**
- * THE PUBLIC DEMO.
+ * THE PUBLIC JUDGE FLOW.
  *
- * A visitor gets to press the button that actually calls Google — so the copy
- * here carries a duty. Everything stated as fact is either a labelled example
- * or something Google returned to us; nothing implies the campaign serves,
- * spends or acquires anyone. The strongest claim allowed on this page is the
- * true one: a real campaign resource exists in an isolated test account, and
- * you can make Google confirm it in front of you.
+ * One page, no account, and every stage tied to a real operation. The rule
+ * this component exists to keep is simple: a stage may only show as complete
+ * after the server says the work behind it actually finished. Nothing here is
+ * timed, and no stage is optimistic — if a step fails the pipeline stops and
+ * says so rather than falling back to prepared data.
  */
+
+type Listing = {
+  appId: string;
+  name: string;
+  category?: string;
+  developer?: string;
+  description?: string;
+  storeUrl: string;
+  retrievedAt: string;
+};
+
+type Channel = { platform: string; priority: string; why: string; angle?: string };
+type Analysis = {
+  primaryCategory: string;
+  audience: string;
+  valueProp: string;
+  summary: string;
+  mainProblem: string;
+  recommendedChannels: Channel[];
+};
+
+type Source = {
+  title: string;
+  url: string;
+  domain: string;
+  snippet?: string;
+  position: number;
+  sourceQuery: string;
+  audienceFit: number;
+  audienceSignal: string;
+  painPoint: string;
+  growthAction: string;
+};
+
+type Proposal = {
+  appId: string;
+  goal: string;
+  environment: string;
+  campaignType: string;
+  channel: string;
+  statusPolicy: string;
+  maxDailyBudgetMicros: number;
+  recommendation: { positioning: string; audience: string; messagingAngle: string };
+};
+
+type Run = {
+  id: string;
+  appId: string;
+  stage: string;
+  failedAt: string | null;
+  listing: Listing | null;
+  analysis: Analysis | null;
+  discovery: { scored?: Source[] } | null;
+  proposal: Proposal | null;
+  hasExecution: boolean;
+};
 
 type Proof = {
   campaignId: string | null;
-  campaignName: string | null;
   status: string | null;
   channelType: string | null;
   channelSubType: string | null;
   appId: string | null;
-  dailyBudgetMicros: number | null;
-  completedAt: string | null;
   lastVerifiedAt: string | null;
-  events: { code: string; label: string; detail?: string; status: string; at: string }[];
+  events: { code: string; label: string; status: string; at: string }[];
 };
 
-type Plan = {
-  marketLabel: string;
-  strategy: string;
-  reasoning: string[];
-  dailyBudgetMicros: number;
-  approvedDailyBudgetMicros: number;
-  clampedByPolicy: boolean;
-  campaignStatus: string;
-  channel: string;
-};
+type Verification = { verifiedAt: string; campaignId: string | null; status: string | null };
+type StageState = "pending" | "running" | "complete" | "failed";
 
-type Phase = "intro" | "workspace" | "running" | "done";
+/** Each entry is one real server operation. Nothing is here for decoration. */
+const PIPELINE = [
+  { step: "import-submit", group: "import", running: "Reading Google Play listing…" },
+  { step: "import-poll", group: "import", running: "Reading Google Play listing…" },
+  { step: "analyze", group: "analyze", running: "Analyzing product and building the plan…" },
+  { step: "discover-queries", group: "discover", running: "Generating market research queries…" },
+  { step: "discover-submit", group: "discover", running: "Searching the public web…" },
+  { step: "discover-poll", group: "discover", running: "Searching the public web…" },
+  { step: "discover-score", group: "discover", running: "Analyzing audience signals…" },
+  { step: "propose", group: "execute", running: "Preparing campaign proposal…" },
+] as const;
 
-/** The steps the server will run. Shown as intent before, never as progress. */
-const PLANNED = [
-  "Verify the target is a Google Ads TEST account",
-  "Validate the approved budget against the server ceiling",
-  "Create the campaign budget",
-  "Create the App Campaign — PAUSED",
-  "Read the campaign back from Google",
-];
+/**
+ * Four stages, because there are four real operations. Understand and Plan
+ * come out of a single model call, so the timeline reports it once — the two
+ * results are still presented separately below, where they are two genuinely
+ * different product outputs.
+ */
+const GROUPS = [
+  { key: "import", n: "01", title: "App import" },
+  { key: "analyze", n: "02", title: "Understand & plan" },
+  { key: "discover", n: "03", title: "Discover — market & audience intelligence" },
+  { key: "execute", n: "04", title: "Campaign proposal" },
+] as const;
 
-const money = (micros: number | null) =>
+const POLL_MS = 4000;
+const POLL_DEADLINE_MS = 8 * 60 * 1000;
+
+const money = (micros: number | null | undefined) =>
   micros == null ? "—" : (micros / 1_000_000).toFixed(2);
-
-const clock = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+const clock = (iso: string | null | undefined) =>
+  iso
+    ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    : "—";
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function DemoWorkspace() {
-  const [phase, setPhase] = useState<Phase>("intro");
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [market, setMarket] = useState<string>(MARKETS[0].code);
-  const [budget, setBudget] = useState<number>(BUDGET_CHOICES[1].micros);
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [proof, setProof] = useState<Proof | null>(null);
-  const [reused, setReused] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [verifyNote, setVerifyNote] = useState<string | null>(null);
-  const [recovering, setRecovering] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [configured, setConfigured] = useState(false);
+  const [url, setUrl] = useState("");
+  const [run, setRun] = useState<Run | null>(null);
+  const [busyStep, setBusyStep] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [announcement, setAnnouncement] = useState("");
 
-  const start = useCallback(async () => {
-    setStarting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/demo/session", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error("session");
+  const [executing, setExecuting] = useState(false);
+  const [proof, setProof] = useState<Proof | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verification, setVerification] = useState<Verification | null>(null);
+
+  const cancelled = useRef(false);
+
+  /** Recover whatever this session already owns. No provider call is made. */
+  const load = useCallback(async () => {
+    const s = await fetch("/api/demo/session", { method: "POST" }).catch(() => null);
+    if (s?.ok) {
+      const data = await s.json().catch(() => ({}));
       setConfigured(Boolean(data.configured));
-      setPhase("workspace");
-    } catch {
-      setError("The demo could not start. Please reload the page and try again.");
-    } finally {
-      setStarting(false);
     }
+    const r = await fetch("/api/demo/run").catch(() => null);
+    if (r?.ok) {
+      const data = await r.json().catch(() => ({}));
+      if (data.run) setRun(data.run as Run);
+    }
+    const st = await fetch("/api/demo/status").catch(() => null);
+    if (st?.ok) {
+      const data = await st.json().catch(() => ({}));
+      if (data.executed && data.proof) setProof(data.proof as Proof);
+    }
+    setReady(true);
   }, []);
 
+  useEffect(() => {
+    const active = { current: true };
+    (async () => {
+      if (!active.current) return;
+      await load();
+    })();
+    return () => {
+      active.current = false;
+      cancelled.current = true;
+    };
+  }, [load]);
+
+  /**
+   * Drive the pipeline one real operation at a time.
+   *
+   * A step advances only after the server returns success for it, so the
+   * timeline can never get ahead of the work. A provider task that is still
+   * queued repeats the same step; anything else stops the run.
+   */
+  const drive = useCallback(async (startRun: Run) => {
+    let current = startRun;
+    for (const stage of PIPELINE) {
+      if (cancelled.current) return;
+      setBusyStep(stage.step);
+      setAnnouncement(stage.running);
+
+      const deadline = Date.now() + POLL_DEADLINE_MS;
+      for (;;) {
+        const res = await fetch("/api/demo/run/advance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ runId: current.id, step: stage.step }),
+        }).catch(() => null);
+
+        if (!res) {
+          setError("The connection was lost. Reload the page — your run is saved.");
+          setBusyStep(null);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (data.run) {
+          current = data.run as Run;
+          setRun(current);
+        }
+        if (!res.ok) {
+          setError(
+            typeof data.error === "string" ? data.error : "This step could not be completed."
+          );
+          setAnnouncement("The pipeline stopped.");
+          setBusyStep(null);
+          return;
+        }
+        if (data.pending) {
+          if (Date.now() > deadline) {
+            setError("The provider is still working. Your run is saved — start it again later.");
+            setBusyStep(null);
+            return;
+          }
+          await sleep(POLL_MS);
+          continue;
+        }
+        break;
+      }
+    }
+    setBusyStep(null);
+    setAnnouncement("Campaign proposal ready for your approval.");
+  }, []);
+
+  const start = useCallback(async () => {
+    setError("");
+    setVerification(null);
+    cancelled.current = false;
+    setBusyStep("start");
+    const res = await fetch("/api/demo/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeUrl: url }),
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    if (!res || !res.ok) {
+      setError(typeof data.error === "string" ? data.error : "The run could not be started.");
+      setBusyStep(null);
+      return;
+    }
+    const fresh = data.run as Run;
+    setRun(fresh);
+    setAnnouncement("AI Growth Director started.");
+    await drive(fresh);
+  }, [url, drive]);
+
   const execute = useCallback(async () => {
-    setPhase("running");
-    setError(null);
-    setVerifyNote(null);
+    setExecuting(true);
+    setError("");
+    setAnnouncement("Calling the Google Ads API now.");
     try {
       const res = await fetch("/api/demo/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ market, approvedDailyBudgetMicros: budget }),
+        body: JSON.stringify({
+          market: "US",
+          approvedDailyBudgetMicros: run?.proposal?.maxDailyBudgetMicros,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(
-          typeof data.error === "string"
-            ? data.error
-            : "The Google Ads test execution could not be completed."
+          typeof data.error === "string" ? data.error : "The test execution could not be completed."
         );
-        setPhase("workspace");
+        setAnnouncement("The execution did not complete.");
         return;
       }
-      setReused(Boolean(data.reused));
-      setPlan((data.plan as Plan) ?? null);
       setProof(data.proof as Proof);
-      setPhase("done");
+      setAnnouncement("Google returned a campaign.");
     } catch {
-      setError(
-        "The connection to the server was lost while the execution was running. Reload the page — if a campaign was created, it will be shown."
-      );
-      setPhase("workspace");
+      setError("The connection was lost during execution. Reload — any campaign will be shown.");
+    } finally {
+      setExecuting(false);
     }
-  }, [market, budget]);
+  }, [run]);
 
   const verify = useCallback(async () => {
     setVerifying(true);
-    setVerifyNote(null);
+    setError("");
     try {
       const res = await fetch("/api/demo/verify", { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.verified) {
-        setVerifyNote(
-          typeof data.error === "string" ? data.error : "Google could not confirm this campaign right now."
+        setError(
+          typeof data.error === "string" ? data.error : "Google could not confirm this campaign."
         );
+        setVerification(null);
         return;
       }
-      setProof((p) =>
-        p
-          ? {
-              ...p,
-              status: data.status ?? p.status,
-              lastVerifiedAt: data.verifiedAt ?? p.lastVerifiedAt,
-              campaignName: data.campaignName ?? p.campaignName,
-            }
-          : p
-      );
-      setVerifyNote(`Google confirmed this campaign again at ${clock(data.verifiedAt)}.`);
+      setVerification({
+        verifiedAt: data.verifiedAt,
+        campaignId: data.campaignId ?? null,
+        status: data.status ?? null,
+      });
+      setAnnouncement(`Google confirmed the campaign at ${clock(data.verifiedAt)}.`);
     } catch {
-      setVerifyNote("The verification request could not be sent.");
+      setError("The verification request could not be sent.");
     } finally {
       setVerifying(false);
     }
   }, []);
 
-  /**
-   * Recover the campaign this session already owns.
-   *
-   * Reads our own records rather than asking to execute again — on a session
-   * that has not run yet, "execute" is a question that creates a campaign.
-   */
-  const recover = useCallback(async (): Promise<boolean> => {
-    const res = await fetch("/api/demo/status").catch(() => null);
-    if (!res) return false;
-    const data = await res.json().catch(() => ({}));
-    if (!data?.executed || !data.proof) return false;
-    setProof(data.proof as Proof);
-    setReused(true);
-    setError(null);
-    setPhase("done");
-    return true;
-  }, []);
-
-  // A session started earlier in this browser may already own an execution.
-  useEffect(() => {
-    if (phase !== "workspace") return;
-    let cancelled = false;
-    (async () => {
-      if (cancelled) return;
-      await recover();
-    })();
-    return () => {
-      cancelled = true;
+  // Stage status is derived from what the server persisted, never from a timer.
+  const groupState = (key: string): StageState => {
+    if (!run) return "pending";
+    const failed = run.failedAt;
+    if (failed === key || (failed === "understand" && key === "analyze")) return "failed";
+    if (failed === "propose" && key === "execute") return "failed";
+    const complete: Record<string, boolean> = {
+      import: Boolean(run.listing),
+      analyze: Boolean(run.analysis),
+      discover: Boolean(run.discovery?.scored?.length),
+      execute: Boolean(run.proposal),
     };
-  }, [phase, recover]);
+    if (complete[key]) return "complete";
+    const running = PIPELINE.find((p) => p.step === busyStep);
+    return running?.group === key ? "running" : "pending";
+  };
+
+  const proofForThisRun = Boolean(proof?.appId && run?.appId && proof?.appId === run?.appId);
+  // One execution per session. Once it is spent, a later app may be researched
+  // but its proposal must not offer an action that would refuse.
+  const executionSpent = Boolean(proof) && !proofForThisRun;
+  const sources = run?.discovery?.scored ?? [];
 
   return (
     <main className="page">
       <div className="notice notice-demo" style={{ marginBottom: 20 }}>
-        Public demo · real Google Ads API · isolated test account
+        Public demo · real providers · Google Ads TEST environment
       </div>
 
       <section className="stack">
-        <div className="section-head">
-          <div>
-            <h1 className="t-h1">See the agent execute, not just advise</h1>
-            <p className="t-lead" style={{ marginTop: 10, maxWidth: 680 }}>
-              This is the product&apos;s own sandbox. You approve a budget, and the server creates a
-              real, paused Google Ads App Campaign in an isolated test account — then asks Google to
-              confirm it in front of you.
-            </p>
-          </div>
-        </div>
-
-        {phase === "intro" && (
-          <div className="card card-lg card-accent animate-in">
-            <h2 className="t-h3">Before you press it</h2>
-            <ul className="stack" style={{ marginTop: 12, paddingLeft: 18 }}>
-              <li className="t-small">
-                No sign-up, no email, no Google account. Your session sees nothing belonging to any
-                customer.
-              </li>
-              <li className="t-small">
-                The campaign is created <strong>PAUSED</strong> in a Google Ads test account. Test
-                accounts cannot serve ads and cannot spend money.
-              </li>
-              <li className="t-small">
-                No ad group or app ad creatives are created, so nothing is submitted for review and
-                nothing is advertised. What you get is a real API resource you can verify.
-              </li>
-              <li className="t-small">
-                One execution per visitor. The budget you approve is a request — the server clamps it
-                to its own ceiling before anything reaches Google.
-              </li>
-            </ul>
-            <div className="row-wrap" style={{ marginTop: 20 }}>
-              <button className="btn btn-primary btn-lg" onClick={start} disabled={starting}>
-                {starting ? "Starting…" : "Try the live demo"}
-              </button>
-              <Link href="/" className="btn btn-secondary btn-lg">
-                Back to the site
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {phase !== "intro" && (
-          <>
-            {configured === false && (
-              <div className="notice notice-warning">
-                The Google Ads sandbox is not configured on this deployment, so the execution button
-                is unavailable. Everything below is the same demo workspace a judge would see.
-              </div>
-            )}
-            {error && (
-              <div className="notice notice-error">
-                <span className="stack">
-                  <span>{error}</span>
-                  <span>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      disabled={recovering}
-                      onClick={async () => {
-                        setRecovering(true);
-                        const found = await recover();
-                        if (!found)
-                          setError(
-                            "No campaign was created for this session, so nothing was left behind. You can run the demo again."
-                          );
-                        setRecovering(false);
-                      }}
-                    >
-                      {recovering ? "Checking…" : "Check whether a campaign was created"}
-                    </button>
-                  </span>
-                </span>
-              </div>
-            )}
-
-            <DemoAppWorkspace />
-
-            {phase !== "done" && (
-              <section className="card card-lg" aria-labelledby="autopilot">
-                <div className="spread">
-                  <h2 id="autopilot" className="t-h2">
-                    Growth Autopilot
-                  </h2>
-                  <Badge tone="accent">Step 4 · Execute</Badge>
-                </div>
-                <p className="t-small" style={{ marginTop: 8, maxWidth: 640 }}>
-                  Choose the market and the daily budget you are willing to approve. Everything else —
-                  the advertising account, the campaign type and the paused status — is decided by the
-                  server, not by this page.
-                </p>
-
-
-                <div className="stack-lg" style={{ marginTop: 20 }}>
-                  <div className="field">
-                    <label className="field-label" htmlFor="market">
-                      Market
-                    </label>
-                    <select
-                      id="market"
-                      className="input"
-                      value={market}
-                      onChange={(e) => setMarket(e.target.value)}
-                      disabled={phase === "running"}
-                    >
-                      {MARKETS.map((m) => (
-                        <option key={m.code} value={m.code}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="field">
-                    <span className="field-label">Daily budget you approve</span>
-                    <div className="row-wrap" style={{ marginTop: 4 }}>
-                      {BUDGET_CHOICES.map((b) => (
-                        <button
-                          key={b.micros}
-                          type="button"
-                          className={`btn ${budget === b.micros ? "btn-primary" : "btn-secondary"}`}
-                          onClick={() => setBudget(b.micros)}
-                          disabled={phase === "running"}
-                          aria-pressed={budget === b.micros}
-                        >
-                          {b.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="field-hint">
-                      In the test account&apos;s own currency. A test account is never charged.
-                    </p>
-                  </div>
-
-                  <div className="card card-muted">
-                    <h3 className="t-label">What the server will do</h3>
-                    <ol className="steps" style={{ marginTop: 12, listStyle: "none" }}>
-                      {PLANNED.map((s) => (
-                        <li key={s} className="step">
-                          <span className="step-dot" aria-hidden="true">
-                            ✓
-                          </span>
-                          <span>{s}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-
-                  <div>
-                    <button
-                      className={`btn btn-primary btn-lg btn-block${phase === "running" ? " btn-busy" : ""}`}
-                      onClick={execute}
-                      disabled={phase === "running" || !configured}
-                    >
-                      {phase === "running" ? (
-                        <>
-                          <span className="spinner spinner-dark" aria-hidden="true" /> Calling the
-                          Google Ads API…
-                        </>
-                      ) : (
-                        "Execute in Google Ads (test account)"
-                      )}
-                    </button>
-                    <p className="t-meta" style={{ marginTop: 10, textAlign: "center" }}>
-                      Creates one paused campaign. Nothing is published and no ads are served.
-                    </p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {phase === "running" && (
-              <div className="card card-muted" role="status" aria-live="polite">
-                <div className="row">
-                  <span className="spinner" aria-hidden="true" />
-                  <span className="t-small">
-                    The server is calling Google now. Each step below will be listed with the time
-                    Google answered — this console reports results, it does not animate guesses.
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {phase === "done" && proof && (
-              <ExecutionResult
-                proof={proof}
-                plan={plan}
-                reused={reused}
-                verifying={verifying}
-                verifyNote={verifyNote}
-                onVerify={verify}
-              />
-            )}
-          </>
-        )}
-      </section>
-    </main>
-  );
-}
-
-/** Steps 1–3 of the loop, as a worked example. Every card states its source. */
-function DemoAppWorkspace() {
-  return (
-    <section className="stack-lg" aria-label="Demo workspace">
-      <div className="card">
-        <div className="spread">
-          <div>
-            <h2 className="t-h3">{DEMO_APP.name}</h2>
-            <p className="t-meta" style={{ marginTop: 4 }}>
-              {DEMO_APP.category} · Google Play
-            </p>
-          </div>
-          <Badge tone="neutral">Example app</Badge>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="spread">
-          <h3 className="t-h3">1 · Understand</h3>
-          <Chip>Retrieved + AI inference</Chip>
-        </div>
-        <dl className="kv" style={{ marginTop: 14 }}>
-          {UNDERSTAND.map((f) => (
-            <div key={f.label}>
-              <dt className={f.provenance === "RETRIEVED" ? "prov-retrieved" : "prov-ai"}>
-                {f.label} <span className="prov-label">{f.provenance}</span>
-              </dt>
-              <dd>{f.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div className="card">
-        <h3 className="t-h3">2 · Promote</h3>
-        <div className="stack" style={{ marginTop: 12 }}>
-          {PROMOTE.map((c) => (
-            <div key={c.channel} className="prov prov-ai">
-              <div className="row-wrap">
-                <strong className="t-body">{c.channel}</strong>
-                <Badge tone={c.priority === "high" ? "success" : "neutral"}>{c.priority}</Badge>
-              </div>
-              <p className="t-small" style={{ marginTop: 4 }}>
-                {c.why}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="spread">
-          <h3 className="t-h3">3 · Discover</h3>
-          <Chip>Example results</Chip>
-        </div>
-        <p className="t-small" style={{ marginTop: 6 }}>
-          In a real project these come from live web search. Here they are fixed examples, so that
-          what you compare is the judgement — including the one this product refuses to recommend.
-        </p>
-        <div className="stack" style={{ marginTop: 14 }}>
-          {DISCOVER.map((d) => (
-            <div key={d.title} className="card card-muted">
-              <div className="spread">
-                <strong className="t-body">{d.title}</strong>
-                <Badge
-                  tone={d.quality === "strong" ? "success" : d.quality === "weak" ? "danger" : "neutral"}
-                >
-                  {d.quality}
-                </Badge>
-              </div>
-              <p className="t-meta" style={{ marginTop: 4 }}>
-                {d.domain} · {d.pageType}
-              </p>
-              <p className="snippet" style={{ marginTop: 8 }}>
-                {d.snippet}
-              </p>
-              <p className="t-small" style={{ marginTop: 8 }}>
-                {d.why}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/** The proof, and the honest limits of what it proves. */
-function ExecutionResult({
-  proof,
-  plan,
-  reused,
-  verifying,
-  verifyNote,
-  onVerify,
-}: {
-  proof: Proof;
-  plan: Plan | null;
-  reused: boolean;
-  verifying: boolean;
-  verifyNote: string | null;
-  onVerify: () => void;
-}) {
-  return (
-    <section className="stack-lg animate-in" aria-label="Execution result">
-      {reused && (
-        <div className="notice notice-info">
-          This session already created a campaign, so you are seeing that one again rather than a
-          second campaign. One execution per visitor keeps a public button from becoming a campaign
-          generator.
-        </div>
-      )}
-
-      <div className="card card-lg card-accent">
-        <div className="spread">
-          <h2 className="t-h2">Google Ads campaign created</h2>
-          <Badge tone="success">{proof.status ?? "PAUSED"}</Badge>
-        </div>
-        <p className="t-small" style={{ marginTop: 8, maxWidth: 640 }}>
-          These values were read back from Google after creation — not copied from the request we
-          sent.
-        </p>
-        <dl className="kv" style={{ marginTop: 16 }}>
-          <div>
-            <dt>Campaign ID</dt>
-            <dd className="t-mono">{proof.campaignId ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Campaign name</dt>
-            <dd>{proof.campaignName ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Status</dt>
-            <dd>{proof.status ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Channel</dt>
-            <dd>
-              {proof.channelType ?? "—"}
-              {proof.channelSubType ? ` · ${proof.channelSubType}` : ""}
-            </dd>
-          </div>
-          <div>
-            <dt>Promoted app</dt>
-            <dd className="t-mono break-any">{proof.appId ?? "—"}</dd>
-          </div>
-          <div>
-            <dt>Daily budget sent</dt>
-            <dd>{money(proof.dailyBudgetMicros)} / day</dd>
-          </div>
-          <div>
-            <dt>Last confirmed by Google</dt>
-            <dd>{clock(proof.lastVerifiedAt)}</dd>
-          </div>
-        </dl>
-
-        <div className="row-wrap" style={{ marginTop: 20 }}>
-          <button className="btn btn-primary" onClick={onVerify} disabled={verifying}>
-            {verifying ? (
-              <>
-                <span className="spinner spinner-dark" aria-hidden="true" /> Asking Google…
-              </>
-            ) : (
-              "Verify with Google again"
-            )}
-          </button>
-          <span className="t-meta">Queries the Google Ads API live — not our database.</span>
-        </div>
-        {verifyNote && (
-          <p className="t-small" style={{ marginTop: 12 }}>
-            {verifyNote}
+        <div>
+          <h1 className="t-h1">AI Growth Kit — public live demo</h1>
+          <p className="t-lead" style={{ marginTop: 10, maxWidth: 660 }}>
+            Run the real growth workflow yourself — no account required. Paste any Google Play app
+            and the AI Growth Director imports it, understands it, plans acquisition and researches
+            the market before asking you to approve one test campaign.
           </p>
-        )}
-      </div>
+        </div>
 
-      {plan && (
-        <div className="card">
-          <h3 className="t-h3">Why the agent chose this</h3>
-          <ul className="stack" style={{ marginTop: 10, paddingLeft: 18 }}>
-            {plan.reasoning.map((r) => (
-              <li key={r} className="t-small">
-                {r}
-              </li>
-            ))}
-          </ul>
-          {plan.clampedByPolicy && (
-            <div className="notice notice-warning" style={{ marginTop: 14 }}>
-              The approved budget of {money(plan.approvedDailyBudgetMicros)} exceeded the sandbox
-              ceiling, so the server reduced it to {money(plan.dailyBudgetMicros)} before building the
-              request. The ceiling is server code — nothing sent from a browser can raise it.
-            </div>
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcement}
+        </p>
+
+        <div className="card card-lg card-accent">
+          <label className="field-label" htmlFor="store-url">
+            Google Play URL
+          </label>
+          <input
+            id="store-url"
+            className="input"
+            style={{ marginTop: 6 }}
+            placeholder="https://play.google.com/store/apps/details?id=…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            disabled={Boolean(busyStep)}
+            spellCheck={false}
+          />
+          <p className="field-hint">
+            Any public Google Play app works. The link is validated on the server.
+          </p>
+          <div className="row-wrap" style={{ marginTop: 16 }}>
+            <button
+              className={`btn btn-primary btn-lg ${busyStep ? "btn-busy" : ""}`}
+              onClick={start}
+              disabled={Boolean(busyStep) || !ready || url.trim().length === 0}
+            >
+              {busyStep && <span className="spinner spinner-dark" aria-hidden="true" />}
+              {busyStep ? "Running…" : "Start AI Growth Director"}
+            </button>
+            <span className="t-meta">
+              Import, understand, plan and research run automatically. Nothing is created in Google
+              Ads until you approve it.
+            </span>
+          </div>
+          {error && (
+            <p className="notice notice-error" role="alert" style={{ marginTop: 16 }}>
+              <span aria-hidden="true">⚠</span>
+              {error}
+            </p>
           )}
         </div>
-      )}
 
-      <div className="card">
-        <h3 className="t-h3">Execution console</h3>
-        <p className="t-small" style={{ marginTop: 6 }}>
-          Each line was recorded when it happened, with the time it completed.
-        </p>
-        <ol className="steps" style={{ marginTop: 14, listStyle: "none" }}>
-          {proof.events.map((e) => (
-            <li
-              key={e.code + e.at}
-              className={`step ${e.status === "failed" ? "" : "step-done"}`}
-              title={e.detail ?? undefined}
-            >
-              <span className="step-dot" aria-hidden="true">
-                ✓
-              </span>
-              <span className="spread" style={{ width: "100%", gap: 12 }}>
-                <span>{e.label}</span>
-                <span className="t-meta t-mono">{clock(e.at)}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
+        {run && (
+          <ol className="steps card card-lg" style={{ listStyle: "none" }}>
+            {GROUPS.map((g) => {
+              const state = groupState(g.key);
+              return (
+                <li
+                  key={g.key}
+                  className={`step ${
+                    state === "complete" ? "step-done" : state === "running" ? "step-active" : ""
+                  }`}
+                >
+                  <span className="step-dot" aria-hidden="true">
+                    {state === "failed" ? "×" : "✓"}
+                  </span>
+                  <span className="spread" style={{ width: "100%", gap: 12 }}>
+                    <span>
+                      <span className="t-meta t-mono">{g.n}</span> {g.title}
+                    </span>
+                    <span className="t-meta">
+                      {state === "running"
+                        ? PIPELINE.find((p) => p.step === busyStep)?.running
+                        : state}
+                    </span>
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
 
-      <div className="card card-warning">
-        <h3 className="t-h3">What this is, and what it is not</h3>
-        <div className="stack" style={{ marginTop: 10 }}>
-          <p className="t-small">
-            <strong>It is:</strong> a real campaign resource, created through the real Google Ads API
-            in an isolated test account, confirmed by a fresh read query against Google.
-          </p>
-          <p className="t-small">
-            <strong>It is not:</strong> a serving campaign. It is paused, it has no ad group and no
-            app ad assets, so it shows nothing to anyone, spends nothing and acquires no users. A
-            Google Ads test account cannot serve advertising at all.
-          </p>
-          <p className="t-small">
-            The customer path uses this same execution engine with the customer&apos;s own Google Ads
-            account and their own approval — the credential is the only thing that differs.
+        {run?.listing && (
+          <section className="card card-lg" aria-labelledby="understand">
+            <div className="spread">
+              <h2 id="understand" className="t-h2">
+                02 · What this app is
+              </h2>
+              <Chip>Retrieved + AI inference</Chip>
+            </div>
+            <dl className="kv" style={{ marginTop: 16 }}>
+              <div>
+                <dt className="prov-retrieved">
+                  App <span className="prov-label">RETRIEVED</span>
+                </dt>
+                <dd>
+                  {run.listing.name}
+                  <span className="t-mono break-any"> · {run.listing.appId}</span>
+                </dd>
+              </div>
+              {run.listing.category && (
+                <div>
+                  <dt className="prov-retrieved">
+                    Category <span className="prov-label">RETRIEVED</span>
+                  </dt>
+                  <dd>{run.listing.category}</dd>
+                </div>
+              )}
+              {run.analysis && (
+                <>
+                  <div>
+                    <dt className="prov-ai">
+                      What it does <span className="prov-label">AI INFERENCE</span>
+                    </dt>
+                    <dd>{run.analysis.summary}</dd>
+                  </div>
+                  <div>
+                    <dt className="prov-ai">
+                      Target audience <span className="prov-label">AI INFERENCE</span>
+                    </dt>
+                    <dd>{run.analysis.audience}</dd>
+                  </div>
+                  <div>
+                    <dt className="prov-ai">
+                      Main problem <span className="prov-label">AI INFERENCE</span>
+                    </dt>
+                    <dd>{run.analysis.mainProblem}</dd>
+                  </div>
+                  <div>
+                    <dt className="prov-ai">
+                      Value proposition <span className="prov-label">AI INFERENCE</span>
+                    </dt>
+                    <dd>{run.analysis.valueProp}</dd>
+                  </div>
+                </>
+              )}
+            </dl>
+          </section>
+        )}
+
+        {run?.analysis && (
+          <section className="card card-lg" aria-labelledby="plan">
+            <div className="spread">
+              <h2 id="plan" className="t-h2">
+                02 · Acquisition plan
+              </h2>
+              <Chip>AI recommendation</Chip>
+            </div>
+            <div className="stack" style={{ marginTop: 14 }}>
+              {run.analysis.recommendedChannels.slice(0, 4).map((c) => (
+                <div key={c.platform} className="prov prov-ai">
+                  <div className="row-wrap">
+                    <strong className="t-body" style={{ textTransform: "capitalize" }}>
+                      {c.platform}
+                    </strong>
+                    <Badge tone={/high|urgent/i.test(c.priority) ? "success" : "neutral"}>
+                      {c.priority}
+                    </Badge>
+                  </div>
+                  <p className="t-small" style={{ marginTop: 4 }}>
+                    {c.why}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="t-meta divide-top" style={{ marginTop: 16 }}>
+              The model proposes strategy. Permissions, the TEST-versus-production boundary, budget
+              ceilings and provider verification stay in deterministic server code.
+            </p>
+          </section>
+        )}
+
+        {sources.length > 0 && (
+          <section className="card card-lg" aria-labelledby="discover">
+            <div className="spread">
+              <h2 id="discover" className="t-h2">
+                03 · Market &amp; audience intelligence
+              </h2>
+              <Chip>Real web evidence</Chip>
+            </div>
+            <p className="t-small" style={{ marginTop: 6 }}>
+              Research only. AI Growth Kit does not post, comment or message anywhere.
+            </p>
+            <div className="stack" style={{ marginTop: 16 }}>
+              {sources.map((s) => (
+                <article key={s.url} className="card card-muted">
+                  <div className="spread">
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="t-body"
+                      style={{ overflowWrap: "anywhere", fontWeight: 650 }}
+                    >
+                      {s.title}
+                    </a>
+                    <span className="score">{s.audienceFit}%</span>
+                  </div>
+                  <p className="t-meta" style={{ marginTop: 4 }}>
+                    {s.domain} · observed via web search · query “{s.sourceQuery}” · result #
+                    {s.position} · the page itself was not opened or read
+                  </p>
+                  {s.snippet && (
+                    <p className="snippet" style={{ marginTop: 10 }}>
+                      <span className="prov-label" style={{ color: "var(--success)" }}>
+                        Evidence — observed search snippet
+                      </span>
+                      <br />“{s.snippet}”
+                    </p>
+                  )}
+                  {s.audienceSignal && (
+                    <div className="prov prov-ai" style={{ marginTop: 10 }}>
+                      <span className="prov-label">Audience signal · AI inference</span>
+                      <p className="t-small">{s.audienceSignal}</p>
+                    </div>
+                  )}
+                  {s.painPoint && (
+                    <div className="prov prov-ai" style={{ marginTop: 10 }}>
+                      <span className="prov-label">Pain point · AI inference</span>
+                      <p className="t-small">{s.painPoint}</p>
+                    </div>
+                  )}
+                  {s.growthAction && (
+                    <div className="divide-top" style={{ marginTop: 12, paddingTop: 10 }}>
+                      <span className="prov-label" style={{ color: "var(--accent)" }}>
+                        Recommended growth action · AI inference
+                      </span>
+                      <p className="t-small" style={{ marginTop: 4 }}>
+                        {s.growthAction}
+                      </p>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {run?.proposal && !proofForThisRun && (
+          <section className="card card-lg card-accent" aria-labelledby="proposal">
+            <h2 id="proposal" className="t-h2">
+              04 · Campaign proposal
+            </h2>
+            <p className="t-small" style={{ marginTop: 8, maxWidth: 640 }}>
+              Nothing has been created in Google Ads yet. This is where automation stops and you
+              decide.
+            </p>
+
+            <dl className="kv" style={{ marginTop: 16 }}>
+              <div>
+                <dt>Application</dt>
+                <dd className="t-mono break-any">{run.proposal.appId}</dd>
+              </div>
+              <div>
+                <dt>Goal</dt>
+                <dd>{run.proposal.goal}</dd>
+              </div>
+              <div>
+                <dt>Environment</dt>
+                <dd>{run.proposal.environment}</dd>
+              </div>
+              <div>
+                <dt>Campaign type</dt>
+                <dd>
+                  {run.proposal.campaignType} · {run.proposal.channel}
+                </dd>
+              </div>
+              <div>
+                <dt>Status policy</dt>
+                <dd>{run.proposal.statusPolicy}</dd>
+              </div>
+              <div>
+                <dt>Budget ceiling</dt>
+                <dd>{money(run.proposal.maxDailyBudgetMicros)} / day, enforced by the server</dd>
+              </div>
+            </dl>
+
+            <div className="divide-top" style={{ marginTop: 18, paddingTop: 14 }}>
+              <span className="prov-label" style={{ color: "var(--accent)" }}>
+                AI strategy recommendation — not sent to Google
+              </span>
+              <dl className="kv" style={{ marginTop: 10 }}>
+                <div>
+                  <dt>Positioning</dt>
+                  <dd>{run.proposal.recommendation.positioning}</dd>
+                </div>
+                <div>
+                  <dt>Audience</dt>
+                  <dd>{run.proposal.recommendation.audience}</dd>
+                </div>
+                <div>
+                  <dt>Messaging angle</dt>
+                  <dd>{run.proposal.recommendation.messagingAngle}</dd>
+                </div>
+              </dl>
+              <p className="t-meta" style={{ marginTop: 10 }}>
+                Google receives the campaign type, the channel, the paused status, the promoted
+                package and the clamped budget. The strategy above informs your decision; it is not
+                provider configuration.
+              </p>
+            </div>
+
+            <div className="divide-top" style={{ marginTop: 18, paddingTop: 16 }}>
+              {executionSpent ? (
+                <p className="notice notice-warning">
+                  TEST execution already used in this demo session. This proposal was not sent to
+                  Google, and the campaign shown below belongs to the app it was created for.
+                </p>
+              ) : (
+                <>
+                  <button
+                    className={`btn btn-primary btn-lg btn-block ${executing ? "btn-busy" : ""}`}
+                    onClick={execute}
+                    disabled={executing || !configured || run.hasExecution}
+                  >
+                    {executing && <span className="spinner spinner-dark" aria-hidden="true" />}
+                    {executing ? "Calling the Google Ads API…" : "Execute TEST campaign"}
+                  </button>
+                  <p className="t-meta" style={{ marginTop: 10, textAlign: "center" }}>
+                    Creates one PAUSED App Campaign in the isolated TEST account. One execution per
+                    demo session.
+                  </p>
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {proof && (
+          <section className="card card-lg card-accent" aria-labelledby="proof">
+            {run && !proofForThisRun && (
+              <p className="notice notice-info" style={{ marginBottom: 14 }}>
+                Previous TEST execution — created for{" "}
+                <span className="t-mono">{proof.appId}</span>, not for the app currently being
+                researched. One execution is allowed per demo session.
+              </p>
+            )}
+            <div className="spread">
+              <h2 id="proof" className="t-h2">
+                Google provider proof
+              </h2>
+              <Badge tone={proof.status === "PAUSED" ? "success" : "warning"}>
+                {proof.status ?? "Status not confirmed"}
+              </Badge>
+            </div>
+            <dl className="kv" style={{ marginTop: 16 }}>
+              <div>
+                <dt>Provider</dt>
+                <dd>Google Ads API</dd>
+              </div>
+              <div>
+                <dt>Campaign ID</dt>
+                <dd className="t-mono">{proof.campaignId ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Campaign type</dt>
+                <dd>{proof.channelSubType ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Advertising channel</dt>
+                <dd>{proof.channelType ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Promoted app</dt>
+                <dd className="t-mono break-any">{proof.appId ?? "—"}</dd>
+              </div>
+              <div>
+                <dt>Environment</dt>
+                <dd>TEST</dd>
+              </div>
+              <div>
+                <dt>Confirmed at</dt>
+                <dd className="t-mono">{clock(proof.lastVerifiedAt)}</dd>
+              </div>
+            </dl>
+
+            {proof.events.length > 0 && (
+              <ol
+                className="steps divide-top"
+                style={{ marginTop: 18, paddingTop: 14, listStyle: "none" }}
+              >
+                {proof.events.map((e) => (
+                  <li
+                    key={e.code + e.at}
+                    className={`step ${e.status === "failed" ? "" : "step-done"}`}
+                  >
+                    <span className="step-dot" aria-hidden="true">
+                      ✓
+                    </span>
+                    <span className="spread" style={{ width: "100%", gap: 12 }}>
+                      <span>{e.label}</span>
+                      <span className="t-meta t-mono">{clock(e.at)}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            <div className="divide-top" style={{ marginTop: 18, paddingTop: 16 }}>
+              <button
+                className={`btn btn-primary ${verifying ? "btn-busy" : ""}`}
+                onClick={verify}
+                disabled={verifying}
+              >
+                {verifying && <span className="spinner spinner-dark" aria-hidden="true" />}
+                {verifying ? "Asking Google…" : "Verify with Google again"}
+              </button>
+              <p className="t-meta" style={{ marginTop: 10 }}>
+                Runs a new read query against the Google Ads API. Our database is not consulted for
+                the answer.
+              </p>
+              {verification && (
+                <div className="card card-muted" style={{ marginTop: 14 }}>
+                  <div className="spread">
+                    <strong className="t-body">Provider verification</strong>
+                    <Badge tone={verification.status === "PAUSED" ? "success" : "warning"}>
+                      {verification.status ?? "unknown"}
+                    </Badge>
+                  </div>
+                  <p className="t-small" style={{ marginTop: 6 }}>
+                    Google Ads API · campaign{" "}
+                    <span className="t-mono">{verification.campaignId ?? "—"}</span> · verified just
+                    now at {clock(verification.verifiedAt)}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        <div className="card card-warning">
+          <h3 className="t-h3">TEST environment</h3>
+          <p className="t-small" style={{ marginTop: 8 }}>
+            This campaign resource is created through the official Google Ads API in Google&apos;s
+            isolated TEST environment. TEST campaigns cannot serve ads or spend money. Production
+            advertising execution requires Google Ads API Basic Access.
           </p>
         </div>
-      </div>
 
-      <div className="card card-lg">
-        <h3 className="t-h3">Run this on your own app</h3>
-        <p className="t-small" style={{ marginTop: 8, maxWidth: 620 }}>
-          The demo uses a fixed example app so every visitor sees the same thing. With an account you
-          start from your own Google Play link, and discovery runs against live web search.
-        </p>
-        <div className="row-wrap" style={{ marginTop: 18 }}>
-          <Link href="/signup" className="btn btn-primary">
-            Create an account
-          </Link>
-          <Link href="/" className="btn btn-secondary">
-            How it works
-          </Link>
+        <div className="card card-lg">
+          <h3 className="t-h3">Run this on your own app</h3>
+          <p className="t-small" style={{ marginTop: 8, maxWidth: 620 }}>
+            The demo runs the same pipeline the product uses. With an account you keep your
+            projects, revisit the research and connect your own Google Ads account.
+          </p>
+          <div className="row-wrap" style={{ marginTop: 18 }}>
+            <Link href="/signup" className="btn btn-primary">
+              Create an account
+            </Link>
+            <Link href="/" className="btn btn-secondary">
+              How it works
+            </Link>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
   );
 }

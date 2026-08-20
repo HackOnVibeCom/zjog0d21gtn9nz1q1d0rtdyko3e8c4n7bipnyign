@@ -259,10 +259,18 @@ test("the public copy never claims the campaign serves, launches or acquires", (
 test("the demo states the limits of what it proves, in the visitor's words", () => {
   const copy = read("components/app/DemoWorkspace.tsx");
   assert.match(copy, /PAUSED/, "the paused status is stated");
-  assert.match(copy, /test account/i, "the isolated test account is stated");
-  assert.match(copy, /no ad group/i, "the missing ad group is disclosed");
-  assert.match(copy, /spends nothing|cannot spend/i, "the absence of spend is stated");
-  assert.match(copy, /What this is, and what it is not/, "the scope card is present");
+  assert.match(copy, /isolated TEST environment/, "the isolated environment is named");
+  assert.match(
+    copy,
+    /cannot serve ads or spend money/,
+    "the visitor is told a TEST campaign serves and spends nothing"
+  );
+  assert.match(
+    copy,
+    /requires Google Ads API Basic Access/,
+    "the production limitation is stated rather than implied"
+  );
+  assert.match(copy, /TEST environment/, "the disclaimer card is present");
 });
 
 test("the demo page cannot reach an account or a customer project", () => {

@@ -87,10 +87,28 @@ There are two ways in, and they show different things.
 
 ### The public judge sandbox — `/demo`
 
-No signup, no email, no Google account, no shared password. An isolated demo
-session that can see nothing belonging to any customer. It runs on a fixed
-example app so every visitor sees the same thing, and it's where you can press
-the button that actually calls Google.
+No signup, no email, no Google account, no shared password. Paste **any** public
+Google Play app URL — nothing is hardcoded or preloaded — and one button runs the
+real pipeline:
+
+```
+Google Play URL → import → understand → plan → discover
+   → campaign proposal → [your approval] → Google Ads TEST execution
+   → fresh Google verification
+```
+
+Each stage is its own server round trip, so a stage only shows as complete after
+the operation behind it genuinely returned. The listing comes from the store,
+the analysis from the model, the evidence from a live DataForSEO search. If a
+provider fails, the pipeline stops and says so — there is no prepared fallback
+data standing in for a live result.
+
+Automation stops at the campaign proposal. Creating anything in Google Ads takes
+a second, explicit click, and that execution is TEST-only: one per demo session,
+counted in the database rather than trusted to a disabled button, and guarded by
+a kill switch and hourly caps. Public `/demo` can never use a customer's
+production credential, and it stays TEST-only regardless of what access level
+the developer token is later granted.
 
 ### The full product — sign up
 

@@ -268,3 +268,44 @@ model DemoSession {
   @@index([clientHash, createdAt])
   @@index([createdAt])
 }
+
+/// One public research run in the judge demo.
+///
+/// The demo has no account to hang state on, so a run is the unit that owns
+/// everything a judge produces: which app they pasted, what each stage
+/// returned, and how far the pipeline got. Keeping it server-side is what lets
+/// a refresh recover the page, and what lets rate limiting be counted rather
+/// than trusted — a browser cannot forge rows.
+model DemoRun {
+  id        String   @id @default(cuid())
+  sessionId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Package id of the app being researched. Never a hardcoded example.
+  appId     String
+  storeUrl  String
+
+  /// pending | importing | analyzing | discovering | proposed | failed
+  stage     String   @default("importing")
+  /// The only advance step this run will execute next. A public endpoint must
+  /// not let a caller replay a paid provider step by asking for it twice.
+  nextStep  String   @default("import-submit")
+  /// Set only when a stage genuinely failed; the pipeline then stops.
+  failedAt  String?
+  errorCode String?
+
+  /// Stage results, each stored as JSON exactly as the stage produced it.
+  listing   String?
+  analysis  String?
+  discovery String?
+  proposal  String?
+
+  /// Set while a stage is in flight, so a second Start cannot run in parallel.
+  activeAt  DateTime?
+  /// The Google Ads execution this run produced, if the judge approved one.
+  executionId String?
+
+  @@index([sessionId, createdAt])
+  @@index([createdAt])
+}
