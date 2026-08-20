@@ -26,12 +26,11 @@ export function demoCommunities(appName: string): DemoCommunity[] {
       url: "https://example.com/community/example-audience-hub",
       memberCount: 128000,
       audienceFit: 92,
-      relevanceReason:
-        "Members actively discuss the exact problem this app solves (illustrative).",
+      relevanceReason: `Members actively discuss the exact problem ${appName} solves (illustrative).`,
       promotionPolicy: "restricted",
       policyEvidence: "Self-promo allowed only in the weekly thread (illustrative).",
       suggestedApproach: "educational_post",
-      generatedContent: `[DEMO] A helpful, problem-first post introducing ${appName}, ending with a tracking link.`,
+      generatedContent: null,
       isDemo: true,
     },
     {

@@ -3,10 +3,10 @@
 **A growth agent for people who can build software but not distribute it.**
 
 You give it your app. It works out who the app is for, recommends where to
-promote it, finds real public discussions where those people already gather,
-prepares the promotion, and — in an isolated Google Ads test environment —
-creates a real advertising campaign resource and then asks Google to confirm
-that it exists.
+promote it, gathers real public web evidence about those people — what they
+need and the words they use — and then, in an isolated Google Ads test
+environment, creates a real advertising campaign resource and asks Google to
+confirm that it exists.
 
 **Production:** https://ai-growth-kit-695.netlify.app
 **Judge sandbox (no signup):** https://ai-growth-kit-695.netlify.app/demo
@@ -58,27 +58,28 @@ itself, not from a blank marketing prompt.
 
 Because it begins with the real store listing, every later step inherits context:
 the audience analysis feeds the channel recommendations, which feed the search
-queries, which feed the scoring of what it finds, which feeds the drafts and the
-campaign proposal.
+queries, which feed the scoring of what it finds, which feeds the audience
+evidence behind the campaign proposal.
 
 ## Product flow
 
 ```
-App link → Understand → Promote → Discover → Execute → Measure
+App link → Understand → Promote → Discover → Execute
 ```
 
 | Step | What happens |
 | --- | --- |
 | **Understand** | Imports the real Google Play listing and works out the audience, the problem the app solves, and its positioning. |
 | **Promote** | Recommends acquisition channels for this specific app, with the reasoning for each. |
-| **Discover** | Searches the public web for discussions by people who have this problem, and scores whether the right people are actually there. |
-| **Publish** | Prepares a draft and a unique tracking link; publishes to your own Discord channel if you connect one. |
+| **Discover** | Searches the public web for evidence about the people who have this problem — who they are, what they need, and the words they use — and turns it into growth insight. Research only. |
 | **Execute** | Creates a real, paused Google Ads App Campaign in an isolated test account and proves it with a fresh read from Google. |
-| **Measure** | Counts every click on every tracking link, first-party. |
 
-The longer-term direction adds **Optimize** — acting on measured results
-automatically. That is not implemented, and nothing in the product pretends
-otherwise.
+First-party tracking infrastructure (`TrackingLink`, `TrackingEvent`, the
+`/r/:slug` redirect) exists underneath and still records real clicks, but
+measurement is not currently one of the product's user-facing stages. The
+longer-term direction adds attribution and then **Optimize** — acting on
+measured results automatically. Neither is implemented, and nothing in the
+product pretends otherwise.
 
 ## Try it live
 
@@ -94,8 +95,8 @@ the button that actually calls Google.
 ### The full product — sign up
 
 Your own app, your own project. Real Google Play import, real analysis, real web
-discovery, real tracking links. Inside the project, Step 3 also offers the same
-safe Google Ads test execution — using your app's package ID, still in the
+discovery. Inside the project, Step 3 also offers the same safe Google Ads test
+execution — using your app's package ID, still in the
 isolated test account.
 
 ## What's working today
@@ -104,11 +105,9 @@ isolated test account.
 - Google Play app import with real store data
 - Product understanding, audience and positioning analysis
 - Channel recommendations with reasoning
-- Web audience discovery backed by DataForSEO search
-- Relevance and actionability scoring, including a refusal to recommend weak fits
-- AI draft preparation
-- Publishing to your own Discord channel via webhook
-- First-party tracking links and real click counting
+- Market and audience intelligence backed by real DataForSEO web search
+- Relevance scoring, including a refusal to recommend weak fits
+- Audience signals, pain points and recommended growth actions from real evidence
 - Google Ads OAuth connection, account hierarchy discovery, account selection,
   encrypted refresh-token storage — **read access only**
 - Real Google Ads TEST execution: campaign budget, App Campaign, Google-issued
@@ -185,8 +184,7 @@ AI does real work here — it isn't a label on a form.
 | --- | --- |
 | Understand | Reads the store listing and infers audience, problem, and value proposition |
 | Promote | Chooses which channels fit this specific app, and explains why |
-| Discover | Generates the search queries, then judges whether the people in each result are actually your users |
-| Publish | Drafts the promotional content |
+| Discover | Generates the search queries, judges whether the people in each result are actually your users, and turns that evidence into audience signals, pain points and growth actions |
 
 The model currently used throughout is **`gpt-4o-mini`** via the OpenAI API.
 There is no multi-model routing and no autonomous optimization loop; claiming
@@ -272,7 +270,7 @@ purchasable:
 | Tier (conceptual) | Intended shape |
 | --- | --- |
 | **Free / trial** | One project, limited analysis and discovery — enough to judge whether the workflow saves you time |
-| **Starter** | More projects, deeper discovery, publishing and measurement — aimed at indie developers and solo founders |
+| **Starter** | More projects and deeper audience research — aimed at indie developers and solo founders |
 | **Pro** | Larger limits, automation, and advanced execution as those capabilities become production-ready; collaboration later |
 
 On advertising money: **AI Growth Kit charges for the software, not the ad
@@ -287,7 +285,7 @@ whole category of financial and regulatory risk from the business.
 2. Have them import a real app and check whether the product saves meaningful
    time across analysis, promotion planning, and audience discovery.
 3. Convert the users who keep coming back to discovery, content preparation,
-   publishing, and measurement into an early paid subscription.
+   into an early paid subscription.
 4. Add production Google Ads execution as a higher-value paid capability once
    production execution, campaign completeness, and attribution are ready.
 5. Expand to further acquisition channels based on what customers actually use,
@@ -295,8 +293,7 @@ whole category of financial and regulatory risk from the business.
 
 The first paying customer does not require the whole roadmap. What exists today
 — app analysis, promotion planning, audience discovery, content preparation,
-authorized Discord publishing, and first-party click measurement — is already
-useful work.
+and first-party click measurement — is already useful work.
 
 There are no customers and no revenue yet. This is the plan, not a report.
 
@@ -322,8 +319,7 @@ We are not claiming profitability.
 **Working today:** landing page · authentication · tenant-isolated projects ·
 Google Play import · product understanding · promotion recommendations · web
 audience discovery (DataForSEO) · relevance and actionability scoring · AI
-content preparation · Discord publishing to your own channel · first-party
-tracking links · real click tracking · Google Ads OAuth and read access · account
+audience and pain-point intelligence · Google Ads OAuth and read access · account
 hierarchy discovery · account selection · Google Ads TEST execution ·
 `CampaignBudget` creation · App Campaign resource creation · real Campaign ID ·
 forced `PAUSED` · Google read-back · Verify with Google again · budget safety
@@ -351,9 +347,10 @@ service account into the isolated test hierarchy.
 
 Web discovery is live and real: DataForSEO-backed Google search, real public
 source URLs, real page titles and snippets, and scoring that judges whether the
-right people are in the conversation. Candidates that fail the audience test are
-shown as research rather than recommended, and the server refuses to prepare
-them.
+right people are in the conversation. Each source is read for what it reveals —
+an audience signal, a pain point, and a recommended growth action such as an ad
+angle or a positioning change. Sources that fail the audience test are shown as
+weaker evidence rather than recommended.
 
 **Reddit is not live.** The provider is written against Reddit's official
 OAuth API, but credentials are still pending approval, so the product reports
@@ -373,21 +370,28 @@ surfaces, including YouTube.
 **Not implemented:** dedicated YouTube campaign management, Demand Gen, explicit
 YouTube Shorts targeting, or any YouTube publishing integration.
 
-### Publishing
+### Discovery is research, not outreach
 
-Drafts are prepared for you to review. Publishing goes to **your own** Discord
-channel through a webhook you connect. There is no automated posting into
-third-party communities — discovering a community is not the same as being
-welcome to post in it, and the product says so where it matters.
+Discovery reads public web evidence and turns it into growth insight: who the
+audience is, what they need, the language they use, and how that should change
+your advertising and positioning. AI Growth Kit does not post, comment, message
+or contact anyone in the sources it finds, and it does not draft promotional
+posts for them.
+
+An owned Discord publishing integration exists in the codebase but is currently
+not part of the primary user-facing growth flow.
 
 ### Measurement
 
-Every prepared placement carries a first-party tracking link. `/r/:slug` records
-a `TrackingEvent` and redirects; the dashboard counts those clicks.
+First-party tracking exists as infrastructure rather than as a product stage:
+`/r/:slug` records a real `TrackingEvent` and redirects, and the analytics
+endpoint can still read those counts. It is not surfaced in the current
+workspace, and it is kept for attribution work once production advertising is
+available.
 
-Measurement today means **click tracking**. Paid impressions, attributed
-installs, conversions, cost per install, return on ad spend, and revenue
-attribution are not measured and are not displayed.
+Nothing here measures paid impressions, attributed installs, conversions, cost
+per install, return on ad spend, or revenue attribution — none of those are
+measured, and none are displayed.
 
 ## Measurement and provenance
 
@@ -430,8 +434,7 @@ this button can be public.
 1. Open **https://ai-growth-kit-695.netlify.app**
 2. Create an account
 3. Add your app from its Google Play URL and run the analysis
-4. Walk through Understand → Promote → Discover, and use publishing and
-   measurement where relevant
+4. Walk through Understand → Promote → Discover
 5. Step 3 also offers the same safe Google Ads test execution for your app
 6. The Google Ads connection card shows the read-only customer integration
 
@@ -472,7 +475,7 @@ produced a broken Prisma client in the serverless runtime.
 - Customer Google Ads is read-only; production execution is not enabled
 - Test campaigns have no ad group and no creatives, so they cannot serve
 - Reddit discovery is pending API approval
-- Measurement is click tracking only
+- Measurement is not a user-facing stage; click tracking exists only as backend infrastructure
 - No billing, subscriptions, or team features
 - Rate limits and caps are enforced in the database and unit-tested, but have not
   been load-tested

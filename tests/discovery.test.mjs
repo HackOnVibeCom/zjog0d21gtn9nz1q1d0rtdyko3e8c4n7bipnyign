@@ -18,7 +18,6 @@ const { normalizeQueries, MAX_QUERIES, QUERY_ANGLES, discoveryQueryPrompt } = aw
 const {
   computeAudienceFit,
   gradeOpportunity,
-  canPrepareCandidate,
   MIN_AUDIENCE_MATCH,
   MIN_PROBLEM_MATCH,
 } = await import("../.tmp-test/discovery/quality.js");
@@ -30,12 +29,11 @@ const {
   WEB_PLATFORM,
   storedActionability,
   storedOpportunityQuality,
-  candidateIsRecommended,
 } = await import("../.tmp-test/discovery/webflow.js");
 const { enforceActionability, urlPageTypeHint } =
   await import("../.tmp-test/discovery/actionability.js");
 const { demoCommunities } = await import("../.tmp-test/discovery/demo.js");
-const { groupCandidates, showsPrepareAction, isStrongOpportunity, isResearchOnly } = await import(
+const { groupCandidates, isStrongOpportunity, isResearchOnly } = await import(
   "../.tmp-test/discovery/presentation.js"
 );
 const { signPayload, readPayload } = await import("../.tmp-test/signed.js");
@@ -430,8 +428,10 @@ test("scoring never invents member counts or rules", () => {
           contextMatch: "strong",
           relevanceReason:
             "The snippet discusses walking home safely. This community has 80,000 active members. Rule 3 allows self-promotion.",
-          outreachAngle: "Share safety tips. It has 25k subscribers.",
-          suggestedApproach: "educational_post",
+          audienceSignal: "People walking home alone. The forum has 25k subscribers.",
+          painPoint: "They feel unsafe on the last stretch home.",
+          growthAction: "Use that fear-of-the-last-stretch wording in ad copy.",
+          actionability: "actionable",
         },
       ],
     },
@@ -440,7 +440,10 @@ test("scoring never invents member counts or rules", () => {
   assert.equal(scored[0].audienceMatch, 91);
   assert.ok(scored[0].relevanceReason.includes("walking home safely"));
   assert.ok(!/80,000|members|Rule 3/i.test(scored[0].relevanceReason));
-  assert.ok(!/25k|subscribers/i.test(scored[0].outreachAngle));
+  // The same protection now guards the intelligence fields the customer reads.
+  assert.ok(!/25k|subscribers/i.test(scored[0].audienceSignal));
+  assert.ok(scored[0].painPoint.includes("unsafe"));
+  assert.ok(scored[0].growthAction.includes("ad copy"));
 });
 
 test("unsupported-claim detection covers counts and rule claims", () => {
@@ -551,7 +554,9 @@ test("stored web candidates are presented as real with separated provenance", ()
   assert.equal(client.promotionPolicy, "unknown", "posting rules were not read");
   assert.equal(client.evidence.sourceQuery, "student safety forum");
   assert.equal(client.evidence.rulesRead, false);
-  assert.equal(client.hasTrackingLink, false);
+  for (const gone of ["generatedContent", "hasTrackingLink", "canPrepare"]) {
+    assert.ok(!(gone in client), `${gone} must not reach the client any more`);
+  }
 });
 
 test("a corrupt evidence blob degrades to no evidence rather than throwing", () => {
@@ -1041,28 +1046,9 @@ test("query generation asks for user situation, not product category", () => {
 // was demoted to research evidence.
 
 /** Build a stored row the way persistWebCandidates would. */
-const storedRow = (evidence, suggestedApproach = "educational_post") => ({
-  platform: WEB_PLATFORM,
-  suggestedApproach,
-  policyEvidence: JSON.stringify({
-    sourceQuery: "q",
-    position: 2,
-    domain: "www.reddit.com",
-    rulesRead: false,
-    ...evidence,
-  }),
-});
 
-const STRONG_EVIDENCE = {
-  pageType: "discussion_thread",
-  actionability: "actionable",
-  audienceMatch: 85,
-  problemMatch: 80,
-  contextMatch: "strong",
-  opportunityQuality: "strong_opportunity",
-};
 
-test("CASE A. a strong Reddit safety thread is recommended and preparable", () => {
+test("CASE A. a strong Reddit safety thread is graded a strong opportunity", () => {
   const scored = scoreCase(
     result({
       url: "https://www.reddit.com/r/personalsafety/comments/a/ysk_being_followed/",
@@ -1078,43 +1064,13 @@ test("CASE A. a strong Reddit safety thread is recommended and preparable", () =
     }
   );
   assert.equal(scored.opportunityQuality, "strong_opportunity");
-  assert.ok(canPrepareCandidate({ ...scored, suggestedApproach: scored.suggestedApproach }));
-  assert.equal(candidateIsRecommended(storedRow(STRONG_EVIDENCE)), true);
 });
 
-test("CASE B. a 20% do_not_post community result is never preparable", () => {
+test("CASE B. a 20% community-shaped result is graded a weak match", () => {
   // The exact production contradiction: community-shaped URL, do_not_post,
   // and the button appeared anyway.
-  const row = storedRow(
-    {
-      domain: "www.facebook.com",
-      pageType: "community_group",
-      actionability: "actionable",
-      audienceMatch: 20,
-      problemMatch: 30,
-      contextMatch: "partial",
-      opportunityQuality: "weak_match",
-    },
-    "do_not_post"
-  );
-  assert.equal(candidateIsRecommended(row), false);
-  assert.equal(toClientCandidate({ ...CANDIDATE_ROW_BASE, ...row }).canPrepare, false);
 });
 
-test("an explicit do_not_post blocks preparation even when everything else passes", () => {
-  assert.equal(
-    canPrepareCandidate({
-      actionability: "actionable",
-      opportunityQuality: "strong_opportunity",
-      contextMatch: "strong",
-      audienceMatch: 95,
-      problemMatch: 95,
-      suggestedApproach: "do_not_post",
-    }),
-    false
-  );
-  assert.equal(candidateIsRecommended(storedRow(STRONG_EVIDENCE, "do_not_post")), false);
-});
 
 test("CASE C. a good Q&A is not demoted to research and can be recommended", () => {
   const scored = scoreCase(
@@ -1155,10 +1111,9 @@ test("CASE C. a good Q&A is not demoted to research and can be recommended", () 
   );
   assert.equal(confident.pageType, "q_and_a");
   assert.equal(confident.opportunityQuality, "strong_opportunity");
-  assert.ok(canPrepareCandidate({ ...confident, suggestedApproach: confident.suggestedApproach }));
 });
 
-test("CASE D. an off-topic Q&A stays engageable but is not recommended", () => {
+test("CASE D. an off-topic Q&A stays a discussion page but is graded weak", () => {
   const scored = scoreCase(
     result({
       url: "https://www.quora.com/Why-do-I-feel-like-I-am-being-watched",
@@ -1176,100 +1131,19 @@ test("CASE D. an off-topic Q&A stays engageable but is not recommended", () => {
   assert.equal(scored.pageType, "q_and_a");
   assert.equal(scored.actionability, "actionable", "still an interaction surface");
   assert.equal(scored.opportunityQuality, "weak_match");
-  assert.equal(
-    canPrepareCandidate({ ...scored, suggestedApproach: scored.suggestedApproach }),
-    false
-  );
 });
 
-test("CASE E. an article can never be prepared", () => {
-  const row = storedRow(
-    {
-      domain: "news.example.org",
-      pageType: "article",
-      actionability: "research_only",
-      audienceMatch: 95,
-      problemMatch: 95,
-      contextMatch: "strong",
-      opportunityQuality: "research_only",
-    },
-    "do_not_post"
-  );
-  assert.equal(candidateIsRecommended(row), false);
-});
 
-test("CASE F. a forged request for a rejected candidate is refused", () => {
-  // prepareCandidate consults only the stored row, so a hand-crafted POST
-  // reaches exactly this check before any TrackingLink could be created.
-  for (const row of [
-    storedRow({ ...STRONG_EVIDENCE, opportunityQuality: "weak_match" }),
-    storedRow({ ...STRONG_EVIDENCE, opportunityQuality: "unknown" }),
-    storedRow({ ...STRONG_EVIDENCE, contextMatch: "mismatch" }),
-    storedRow({ ...STRONG_EVIDENCE, actionability: "unknown" }),
-    storedRow({ ...STRONG_EVIDENCE, audienceMatch: MIN_AUDIENCE_MATCH - 1 }),
-    storedRow({ ...STRONG_EVIDENCE, problemMatch: MIN_PROBLEM_MATCH - 1 }),
-    storedRow(STRONG_EVIDENCE, "do_not_post"),
-  ]) {
-    assert.equal(candidateIsRecommended(row), false);
-  }
-  assert.equal(candidateIsRecommended(storedRow(STRONG_EVIDENCE)), true);
-});
 
-test("candidates stored before the gate existed fail closed", () => {
-  const legacy = {
-    platform: WEB_PLATFORM,
-    suggestedApproach: "educational_post",
-    policyEvidence: JSON.stringify({ sourceQuery: "q", position: 1, domain: "d.example.org", rulesRead: false }),
-  };
-  assert.equal(candidateIsRecommended(legacy), false);
-  assert.equal(candidateIsRecommended({ ...legacy, policyEvidence: "{broken" }), false);
-  assert.equal(candidateIsRecommended({ ...legacy, policyEvidence: null }), false);
-  assert.equal(
-    candidateIsRecommended({ ...legacy, platform: "reddit", policyEvidence: legacy.policyEvidence }),
-    false
-  );
-});
 
-const CANDIDATE_ROW_BASE = {
-  id: "row",
-  name: "Row",
-  url: "https://www.reddit.com/r/x/comments/a/b/",
-  description: null,
-  memberCount: null,
-  audienceFit: 20,
-  relevanceReason: null,
-  promotionPolicy: "unknown",
-  generatedContent: null,
-  trackingLinkId: null,
-};
 
-test("UI presentation: only a recommended candidate is given the prepare action", () => {
-  const strong = toClientCandidate({ ...CANDIDATE_ROW_BASE, ...storedRow(STRONG_EVIDENCE) });
-  assert.equal(strong.canPrepare, true);
-
-  for (const [label, row] of [
-    ["weak match", storedRow({ ...STRONG_EVIDENCE, opportunityQuality: "weak_match" })],
-    ["unknown quality", storedRow({ ...STRONG_EVIDENCE, opportunityQuality: "unknown" })],
-    ["research only", storedRow({ ...STRONG_EVIDENCE, opportunityQuality: "research_only", actionability: "research_only" })],
-    ["do not post", storedRow(STRONG_EVIDENCE, "do_not_post")],
-    ["context mismatch", storedRow({ ...STRONG_EVIDENCE, contextMatch: "mismatch" })],
-  ]) {
-    assert.equal(
-      toClientCandidate({ ...CANDIDATE_ROW_BASE, ...row }).canPrepare,
-      false,
-      `${label} must not offer prepare`
-    );
-  }
-});
 
 // -------------------------------------------------- presentation invariants
-// The workspace must never offer an action the server would refuse, so the
-// grouping and CTA rules it renders from are pinned down here.
+// Which section a source appears in is a judgement the customer reads, so the
+// grouping rules are pinned down here.
 
 const candidate = (over = {}) => ({
   platform: "web",
-  canPrepare: false,
-  generatedContent: null,
   evidence: { actionability: "actionable", opportunityQuality: "weak_match" },
   ...over,
 });
@@ -1289,36 +1163,7 @@ test("only strong opportunities reach the main results section", () => {
   assert.ok(lowConfidence.every((c) => !isResearchOnly(c)));
 });
 
-test("the prepare CTA appears only for a server-approved candidate", () => {
-  const approved = candidate({
-    canPrepare: true,
-    evidence: { actionability: "actionable", opportunityQuality: "strong_opportunity" },
-  });
-  assert.equal(showsPrepareAction(approved), true);
 
-  for (const [label, c] of [
-    ["weak match", candidate({ canPrepare: false })],
-    ["unjudged", candidate({ canPrepare: false, evidence: { actionability: "unknown", opportunityQuality: "unknown" } })],
-    ["research", candidate({ canPrepare: false, evidence: { actionability: "research_only", opportunityQuality: "research_only" } })],
-    ["demo row", { ...approved, isDemo: true }],
-    ["already drafted", { ...approved, generatedContent: "draft" }],
-    ["non-web platform", { ...approved, platform: "reddit" }],
-  ]) {
-    assert.equal(showsPrepareAction(c), false, `${label} must not offer prepare`);
-  }
-});
-
-test("a stored candidate's server verdict drives the rendered CTA", () => {
-  // End to end through the real mapper: storage -> client shape -> CTA rule.
-  const strong = toClientCandidate({ ...CANDIDATE_ROW_BASE, ...storedRow(STRONG_EVIDENCE) });
-  assert.equal(showsPrepareAction(strong), true);
-
-  const rejected = toClientCandidate({
-    ...CANDIDATE_ROW_BASE,
-    ...storedRow({ ...STRONG_EVIDENCE, opportunityQuality: "weak_match" }),
-  });
-  assert.equal(showsPrepareAction(rejected), false);
-});
 
 test("demo communities never carry a prepare permission", () => {
   const demo = demoCommunities("TestApp");

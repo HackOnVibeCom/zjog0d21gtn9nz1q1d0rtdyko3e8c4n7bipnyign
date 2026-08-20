@@ -5,15 +5,9 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/app/AppShell";
 import { Badge, Chip, type BadgeTone } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { ProgressSteps, type Step } from "@/components/ui/ProgressSteps";
 import { ProjectAutopilot } from "@/components/app/ProjectAutopilot";
-import {
-  groupCandidates,
-  isLowConfidence,
-  isResearchOnly,
-  showsPrepareAction,
-} from "@/lib/discovery/presentation";
+import { groupCandidates, isLowConfidence, isResearchOnly } from "@/lib/discovery/presentation";
 
 type Channel = {
   platform: string;
@@ -32,20 +26,6 @@ type Analysis = {
   recommendedChannels: Channel[];
 };
 type Project = { id: string; name: string; description?: string; storeUrl?: string };
-type Publication = {
-  id: string;
-  platform: string;
-  status: string;
-  externalPostUrl?: string | null;
-  content: string;
-  clicks: number;
-  error?: string | null;
-};
-type Analytics = {
-  totalClicks: number;
-  clicksByPlatform: Record<string, number>;
-  publications: Publication[];
-};
 type Evidence = {
   sourceQuery: string;
   position: number;
@@ -58,6 +38,9 @@ type Evidence = {
   contextMatch?: "strong" | "partial" | "mismatch" | "unknown";
   opportunityQuality?: "strong_opportunity" | "weak_match" | "research_only" | "unknown";
   rejectionReason?: string;
+  audienceSignal?: string;
+  painPoint?: string;
+  growthAction?: string;
 };
 type Community = {
   id: string;
@@ -70,11 +53,6 @@ type Community = {
   relevanceReason?: string;
   promotionPolicy: string;
   policyEvidence?: string | null;
-  suggestedApproach: string;
-  generatedContent?: string | null;
-  hasTrackingLink?: boolean;
-  /** Server's verdict on whether a post may be prepared. Never re-derived here. */
-  canPrepare?: boolean;
   evidence?: Evidence | null;
   isDemo?: boolean;
 };
@@ -106,12 +84,6 @@ const PAGE_TYPE_LABELS: Record<string, string> = {
   other: "Unclassified",
 };
 
-function statusTone(s: string): BadgeTone {
-  if (s === "published") return "success";
-  if (s === "failed") return "danger";
-  if (s === "requires_user_action") return "warning";
-  return "neutral";
-}
 function policyTone(p: string): BadgeTone {
   if (p === "allowed") return "success";
   if (p === "restricted" || p === "requires_permission") return "warning";
@@ -123,16 +95,12 @@ export default function ProjectDashboard() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<Project | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [launching, setLaunching] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
   const [providerMsg, setProviderMsg] = useState("");
   const [isDemoData, setIsDemoData] = useState(false);
   const [stage, setStage] = useState("");
-  const [preparing, setPreparing] = useState("");
-  const [copied, setCopied] = useState("");
   const [resumable, setResumable] = useState(false);
   const [showWeak, setShowWeak] = useState(false);
 
@@ -171,11 +139,6 @@ export default function ProjectDashboard() {
     }
   }, [runKey]);
 
-  const loadAnalytics = useCallback(async () => {
-    const res = await fetch(`/api/projects/${id}/analytics`);
-    if (res.ok) setAnalytics(await res.json());
-  }, [id]);
-
   useEffect(() => {
     (async () => {
       const res = await fetch(`/api/projects/${id}`);
@@ -201,22 +164,8 @@ export default function ProjectDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "touch" }),
       }).catch(() => {});
-      await loadAnalytics();
     })();
-    const t = setInterval(loadAnalytics, 3000); // live click counter
-    return () => clearInterval(t);
-  }, [id, loadAnalytics, loadRun]);
-
-  async function launch() {
-    setLaunching(true);
-    await fetch("/api/campaigns/launch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: id, platforms: ["discord"] }),
-    });
-    await loadAnalytics();
-    setLaunching(false);
-  }
+  }, [id, loadRun]);
 
   const discoverPost = useCallback(
     async (payload: unknown) => {
@@ -374,20 +323,6 @@ export default function ProjectDashboard() {
     }
   }
 
-  async function prepare(candidateId: string) {
-    if (preparing) return;
-    setPreparing(candidateId);
-    setDiscoverError("");
-    try {
-      const { candidate } = await discoverPost({ step: "prepare", candidateId });
-      setCommunities((prev) => prev.map((c) => (c.id === candidate.id ? candidate : c)));
-    } catch (e) {
-      setDiscoverError((e as Error).message);
-    } finally {
-      setPreparing("");
-    }
-  }
-
   if (!project) {
     return (
       <AppShell>
@@ -430,9 +365,6 @@ export default function ProjectDashboard() {
     const researchOnly = isResearchOnly(c);
     const weak = isLowConfidence(c);
     const quality = c.evidence?.opportunityQuality;
-    // The server decides; the button only reflects that decision.
-    const canPrepare = Boolean(c.canPrepare);
-    const offersPrepare = showsPrepareAction(c);
     const badge = researchOnly
       ? { text: "Research only", tone: "warning" as BadgeTone }
       : quality === "strong_opportunity"
@@ -501,9 +433,27 @@ export default function ProjectDashboard() {
 
         {c.relevanceReason && (
           <div className="prov prov-ai" style={{ marginTop: 14 }}>
-            <span className="prov-label">Why it fits · AI</span>
+            <span className="prov-label">Why it matters · AI inference</span>
             <p className="t-small" style={{ color: "var(--text)" }}>
               {c.relevanceReason}
+            </p>
+          </div>
+        )}
+
+        {isWeb && c.evidence?.audienceSignal && (
+          <div className="prov prov-ai" style={{ marginTop: 12 }}>
+            <span className="prov-label">Audience signal · AI inference</span>
+            <p className="t-small" style={{ color: "var(--text)" }}>
+              {c.evidence.audienceSignal}
+            </p>
+          </div>
+        )}
+
+        {isWeb && c.evidence?.painPoint && (
+          <div className="prov prov-ai" style={{ marginTop: 12 }}>
+            <span className="prov-label">Pain point · AI inference</span>
+            <p className="t-small" style={{ color: "var(--text)" }}>
+              {c.evidence.painPoint}
             </p>
           </div>
         )}
@@ -511,7 +461,7 @@ export default function ProjectDashboard() {
         {weak && c.evidence?.rejectionReason && (
           <div className="prov" style={{ marginTop: 12, borderLeftColor: "var(--warning)" }}>
             <span className="prov-label" style={{ color: "var(--warning)" }}>
-              Why we didn&apos;t recommend it · AI
+              Why we didn&apos;t recommend it · AI inference
             </span>
             <p className="t-small">{c.evidence.rejectionReason}</p>
           </div>
@@ -520,7 +470,7 @@ export default function ProjectDashboard() {
         {isWeb && c.description && (
           <p className="snippet" style={{ marginTop: 12 }}>
             <span className="prov-label" style={{ color: "var(--success)" }}>
-              Evidence — search snippet
+              Evidence — observed search snippet
             </span>
             <br />“{c.description}”
           </p>
@@ -528,18 +478,21 @@ export default function ProjectDashboard() {
 
         {isWeb && c.evidence && (
           <p className="t-meta" style={{ marginTop: 10 }}>
-            Retrieved via web search · query “{c.evidence.sourceQuery}” · Google result #
-            {c.evidence.position} ·{" "}
-            {researchOnly
-              ? "Research evidence — not a direct posting opportunity."
-              : "Potential audience location — posting rules not verified."}
+            Observed via web search · query “{c.evidence.sourceQuery}” · Google result #
+            {c.evidence.position} · the page itself was not opened or read.
           </p>
         )}
 
-        {canPrepare && (
-          <p className="t-meta" style={{ marginTop: 8 }}>
-            Suggested approach (AI): {c.suggestedApproach.replace(/_/g, " ")}
-          </p>
+        {isWeb && !c.isDemo && (
+          <div className="divide-top" style={{ marginTop: 14, paddingTop: 12 }}>
+            <span className="prov-label" style={{ color: "var(--accent)" }}>
+              Recommended growth action · AI inference
+            </span>
+            <p className="t-small" style={{ marginTop: 4, color: "var(--text)" }}>
+              {c.evidence?.growthAction ||
+                "No strategy action was derived from this source — use it as background market evidence."}
+            </p>
+          </div>
         )}
 
         {!c.isDemo && (
@@ -550,57 +503,18 @@ export default function ProjectDashboard() {
               rel="noopener noreferrer"
               className="btn btn-secondary btn-sm"
             >
-              {researchOnly ? "Open source ↗" : "Open community ↗"}
+              Open source ↗
             </a>
-            {!canPrepare && !c.generatedContent && (
-              <span className="t-meta">
-                {researchOnly
-                  ? "Use as research evidence — no post is prepared for articles."
-                  : quality === "weak_match"
-                  ? "Not recommended for outreach — the people here don't look like your users."
-                  : "Not recommended — we couldn't confirm this is your audience."}
-              </span>
-            )}
-            {offersPrepare && (
-              <button
-                className={`btn btn-primary btn-sm ${preparing === c.id ? "btn-busy" : ""}`}
-                onClick={() => prepare(c.id)}
-                disabled={Boolean(preparing)}
-              >
-                {preparing === c.id && <span className="spinner" aria-hidden="true" />}
-                {preparing === c.id ? "Preparing…" : "Prepare post + tracking link"}
-              </button>
-            )}
-            {/* A draft that already exists stays copyable whatever the gate says. */}
-            {c.generatedContent && (
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  navigator.clipboard?.writeText(c.generatedContent ?? "");
-                  setCopied(c.id);
-                }}
-              >
-                {copied === c.id ? "Copied ✓" : "Copy suggested post"}
-              </button>
-            )}
+            <span className="t-meta">
+              Research evidence for your acquisition strategy. AI Growth Kit does not post,
+              comment or message anywhere.
+            </span>
           </div>
         )}
 
-        {c.generatedContent && !researchOnly && (
-          <div style={{ marginTop: 12 }}>
-            <span className="prov-label" style={{ color: "var(--accent)" }}>
-              Suggested post · AI draft
-            </span>
-            <div className="draft" style={{ marginTop: 6 }}>
-              {c.generatedContent}
-            </div>
-          </div>
-        )}
       </article>
     );
   };
-
-  const totalClicks = analytics?.totalClicks ?? 0;
 
   return (
     <AppShell
@@ -635,12 +549,6 @@ export default function ProjectDashboard() {
                 )}
               </div>
             </div>
-          </div>
-          <div style={{ textAlign: "right", flex: "0 0 auto" }}>
-            <div className="t-metric">
-              <AnimatedNumber value={totalClicks} />
-            </div>
-            <div className="t-meta">tracked clicks</div>
           </div>
         </div>
       </header>
@@ -721,22 +629,6 @@ export default function ProjectDashboard() {
           <EmptyState title="No channel recommendations yet" />
         )}
 
-        <div className="divide-top">
-          <div className="spread">
-            <div>
-              <h3 className="t-h3">Owned channel</h3>
-              <p className="t-meta">Posts to your own connected Discord — not audience discovery.</p>
-            </div>
-            <button
-              className={`btn btn-secondary ${launching ? "btn-busy" : ""}`}
-              onClick={launch}
-              disabled={launching}
-            >
-              {launching && <span className="spinner spinner-dark" aria-hidden="true" />}
-              {launching ? "Publishing…" : "Publish to Discord"}
-            </button>
-          </div>
-        </div>
       </section>
 
       {/* --------------------------------------------------------- DISCOVER */}
@@ -748,8 +640,8 @@ export default function ProjectDashboard() {
               Reach the people who need this app
             </h2>
             <p className="t-small" style={{ marginTop: 4, maxWidth: 660 }}>
-              Two ways to reach them, both starting from the analysis above: a real Google Ads test
-              campaign for this app, and the public discussions where these people already gather.
+              Discover where your audience is, what they care about, and how to reach them — then
+              act on it through advertising, not through their inboxes.
             </p>
           </div>
         </div>
@@ -759,14 +651,14 @@ export default function ProjectDashboard() {
 
         {/* Block 2 — the existing audience discovery, unchanged in behaviour. */}
         <article className="card" style={{ marginTop: 20 }} aria-labelledby="audience">
-        <span className="t-label">Audience discovery</span>
+        <span className="t-label">Market &amp; audience intelligence</span>
         <h3 id="audience" className="t-h3" style={{ marginTop: 4 }}>
           Where your audience already gathers
         </h3>
         <p className="t-small" style={{ marginTop: 8, maxWidth: 660, marginBottom: 16 }}>
           {isDemoData
-            ? "Fictional sample communities for demonstrating the discovery workflow — nothing below was retrieved from a real source."
-            : "Searches the public web for discussions by the people who have your problem — judged on who is actually talking, not on matching words. Nothing is posted anywhere."}
+            ? "Fictional sample sources for demonstrating the research workflow — nothing below was retrieved from a real source."
+            : "Searches the public web for evidence about the people who have your problem — who they are, what they need and the words they use. Research only: nothing is posted, sent or messaged anywhere."}
         </p>
 
         <div className="row-wrap" style={{ marginTop: 4 }}>
@@ -850,7 +742,7 @@ export default function ProjectDashboard() {
             <EmptyState
               icon="🔎"
               title="No searches run yet"
-              description="Press “Find my audience” to search the public web for discussions by people with your problem."
+              description="Press “Find my audience” to gather real public web evidence about who your users are and what they need."
             />
           </div>
         )}
@@ -920,85 +812,6 @@ export default function ProjectDashboard() {
         </article>
       </section>
 
-      {/* ---------------------------------------------------------- MEASURE */}
-      <section aria-labelledby="measure" className="card card-lg">
-        <div className="section-head">
-          <div>
-            <span className="t-label">Step 4 · Measure</span>
-            <h2 id="measure" className="t-h2">
-              Results
-            </h2>
-            <p className="t-small">Every prepared link is counted here as people click it.</p>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div className="t-metric">
-              <AnimatedNumber value={totalClicks} />
-            </div>
-            <div className="t-meta">total tracked clicks</div>
-          </div>
-        </div>
-
-        {analytics && Object.keys(analytics.clicksByPlatform).length > 0 && (
-          <div className="row-wrap" style={{ marginBottom: 16 }}>
-            {Object.entries(analytics.clicksByPlatform).map(([platform, clicks]) => (
-              <Chip key={platform}>
-                <span className="break-any">{platform}</span>
-                <b style={{ marginLeft: 6 }}>{clicks}</b>
-              </Chip>
-            ))}
-          </div>
-        )}
-
-        {analytics?.publications.length ? (
-          <div className="stack">
-            {analytics.publications.map((p) => (
-              <div key={p.id} className="card card-muted">
-                <div className="spread">
-                  <div className="row-wrap">
-                    <span className="t-h3" style={{ textTransform: "capitalize" }}>
-                      {p.platform}
-                    </span>
-                    <Badge tone={statusTone(p.status)}>{p.status.replace(/_/g, " ")}</Badge>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <b style={{ fontSize: 18, fontVariantNumeric: "tabular-nums" }}>
-                      <AnimatedNumber value={p.clicks} />
-                    </b>
-                    <div className="t-meta">clicks</div>
-                  </div>
-                </div>
-                {p.content && (
-                  <p className="t-small" style={{ marginTop: 8 }}>
-                    {p.content}
-                  </p>
-                )}
-                {p.externalPostUrl && (
-                  <a
-                    href={p.externalPostUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="t-small"
-                    style={{ color: "var(--accent)", display: "inline-block", marginTop: 8 }}
-                  >
-                    View live post ↗
-                  </a>
-                )}
-                {p.error && (
-                  <p className="notice notice-error" style={{ marginTop: 8 }}>
-                    {p.error}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            icon="📈"
-            title="No tracked links yet"
-            description="Prepare a post for an audience opportunity, or publish to your Discord — each one gets its own link, and clicks appear here."
-          />
-        )}
-      </section>
     </AppShell>
   );
 }

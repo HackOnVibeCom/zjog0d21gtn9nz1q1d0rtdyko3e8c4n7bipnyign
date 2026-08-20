@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Growth Kit — turn one app link into a growth plan",
   description:
-    "Paste your Google Play link. AI Growth Kit understands your app, recommends channels, finds where your audience already gathers, and measures the clicks you earn.",
+    "Paste your Google Play link. AI Growth Kit understands your app, recommends channels, gathers real public evidence about your audience, and creates a Google Ads campaign you can verify with Google.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

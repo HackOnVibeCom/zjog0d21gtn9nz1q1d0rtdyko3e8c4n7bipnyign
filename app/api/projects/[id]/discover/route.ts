@@ -15,7 +15,6 @@ import { readPayload, signPayload } from "@/lib/signed";
 import { scoreWebCandidates } from "@/lib/discovery/webscore";
 import {
   persistWebCandidates,
-  prepareCandidate,
   projectDiscoveryInput,
   toClientCandidate,
   WEB_PLATFORM,
@@ -35,7 +34,6 @@ export const runtime = "nodejs";
  *   { step: "search-submit", queries } → { ticket }     PAID, once per click
  *   { step: "search-poll", ticket }  → { results }      free, repeatable
  *   { step: "score", results }       → { communities }  AI + persist
- *   { step: "prepare", candidateId } → { candidate }    tracking link + draft
  *
  * Legacy behaviour is untouched: { demo: true } returns clearly-labeled
  * fictional data, and a bodyless POST runs the Reddit provider.
@@ -184,41 +182,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         });
       }
 
-      if (step === "prepare") {
-        const candidateId = typeof body.candidateId === "string" ? body.candidateId : "";
-        if (!candidateId) {
-          return NextResponse.json({ error: "candidateId is required" }, { status: 400 });
-        }
-        const out = await prepareCandidate(id, candidateId);
-        if (!out) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        if ("error" in out && out.error === "not_recommended") {
-          return NextResponse.json(
-            {
-              error:
-                "This one isn't a recommended opportunity — no post or tracking link was created.",
-              code: "candidate_not_recommended",
-            },
-            { status: 400 }
-          );
-        }
-        if ("error" in out && out.error === "research_only") {
-          return NextResponse.json(
-            {
-              error:
-                "This is research evidence, not a posting opportunity — no post or tracking link was created.",
-              code: "research_only",
-            },
-            { status: 400 }
-          );
-        }
-        if ("error" in out && out.error === "no_destination") {
-          return NextResponse.json(
-            { error: "Add a store or website URL to this project first." },
-            { status: 400 }
-          );
-        }
-        return NextResponse.json({ candidate: toClientCandidate(out.candidate) });
-      }
+      // The "prepare" step used to draft a promotional post and a tracking
+      // link for an external page. Discovery is market research now, so that
+      // action is no longer offered: the workspace acts on this evidence
+      // through advertising and positioning, not by posting into the sources
+      // it found. The helper remains in lib/discovery/webflow.ts for backend
+      // compatibility and is no longer reachable from the product.
 
       return NextResponse.json({ error: "Unknown step" }, { status: 400 });
     } catch (e) {

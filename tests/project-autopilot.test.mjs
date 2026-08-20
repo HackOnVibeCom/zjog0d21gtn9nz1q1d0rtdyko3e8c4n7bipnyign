@@ -53,11 +53,13 @@ const LIB = "lib/googleAds/projectRun.ts";
 test("the Google Ads demo lives inside Step 3, not as a new numbered step", () => {
   const page = read(PAGE);
   const step3 = page.indexOf("Step 3 · Discover");
-  const step4 = page.indexOf("Step 4 · Measure");
   const block = page.indexOf("<ProjectAutopilot");
-  assert.ok(step3 >= 0 && step4 > step3, "the existing steps still bracket the section");
-  assert.ok(block > step3 && block < step4, "the block sits between step 3 and step 4");
-  assert.doesNotMatch(page, /Step 5 · /, "no new top-level numbered step was introduced");
+  assert.ok(step3 >= 0, "Step 3 still exists");
+  assert.ok(block > step3, "the block sits inside step 3, after its heading");
+  // Step 3 is the final workspace stage now; nothing may add another one.
+  for (const later of ["Step 4 · ", "Step 5 · "]) {
+    assert.ok(!page.includes(later), `no ${later.trim()} step may be introduced`);
+  }
 });
 
 test("the Google Ads demo comes before the audience block", () => {
@@ -69,7 +71,7 @@ test("the Google Ads demo comes before the audience block", () => {
 
 test("steps 1 and 2 are untouched", () => {
   const page = read(PAGE);
-  for (const label of ["Step 1 · Understand", "Step 2 · Promote", "Step 4 · Measure"]) {
+  for (const label of ["Step 1 · Understand", "Step 2 · Promote"]) {
     assert.ok(page.includes(label), `${label} must still be present`);
   }
 });

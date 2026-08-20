@@ -16,15 +16,11 @@ const FLOW = [
   },
   {
     title: "Discover",
-    body: "Real public web search finds discussions where people with your problem already talk to each other.",
+    body: "Real public web search finds where people with your problem talk — who they are, what they need, and the words they use.",
   },
   {
-    title: "Prepare",
-    body: "For a recommended opportunity, a drafted post and a unique tracking link. You post it yourself.",
-  },
-  {
-    title: "Measure",
-    body: "Every link is counted, so you see which placement actually sent people to your app.",
+    title: "Execute",
+    body: "With your approval, AI Growth Kit creates a real Google Ads App Campaign resource in Google's isolated TEST environment and verifies the result directly with Google.",
   },
 ];
 
@@ -38,8 +34,8 @@ const PRINCIPLES = [
     body: "A page can use all your keywords and contain none of your users. Discovery judges who is actually in the conversation, and says when it isn't a fit.",
   },
   {
-    title: "Nothing is published behind your back",
-    body: "Drafts are prepared for you to review and post. Posting rules are never assumed, and automated publishing only runs through channels you connect yourself.",
+    title: "Research, not outreach",
+    body: "Discovery reads public evidence and turns it into audience signals, pain points and advertising angles. It does not post, comment, message or contact anyone in the sources it finds.",
   },
 ];
 
@@ -57,8 +53,9 @@ export default function Landing() {
             practical growth plan
           </h1>
           <p className="t-lead" style={{ maxWidth: 600, margin: "18px auto 0" }}>
-            AI Growth Kit reads your Google Play listing, works out who your users are, finds the
-            public discussions where they already gather, and counts every click you earn.
+            AI Growth Kit reads your Google Play listing, works out who your users are, gathers
+            real public evidence about what they need, and turns it into a campaign you can verify
+            with Google.
           </p>
           <LandingCta />
         </section>
@@ -69,7 +66,7 @@ export default function Landing() {
               <h2 id="flow-heading" className="t-h2">
                 How it works
               </h2>
-              <p className="t-small">Five steps, from a store link to measured clicks.</p>
+              <p className="t-small">Four steps, from a store link to a campaign Google confirms.</p>
             </div>
           </div>
           <div className="flow stagger">
@@ -151,8 +148,8 @@ export default function Landing() {
           <p className="t-small" style={{ marginTop: 10, maxWidth: 720 }}>
             AI Growth Kit uses official platform APIs and permission-aware integrations. It is not
             built for unsolicited mass messaging, unauthorised access, spam, or working around
-            platform and community rules. Discovering a community is not the same as being welcome
-            to post in it, and the product says so.
+            platform and community rules. Discovery is research: the product reads public evidence
+            about an audience and never contacts the sources it finds.
           </p>
         </section>
 

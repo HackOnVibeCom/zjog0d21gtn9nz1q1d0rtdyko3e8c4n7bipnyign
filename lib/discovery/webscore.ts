@@ -23,21 +23,15 @@ import {
 } from "./quality";
 
 /**
- * AI relevance scoring over REAL search evidence.
+ * AI market & audience intelligence over REAL search evidence.
  *
  * The model sees only what the search provider actually returned (title,
- * snippet, domain, position, the query that found it). It may reason about fit
- * and suggest an approach — it must not assert facts about the community that
- * nobody retrieved, such as member counts, activity levels or posting rules.
+ * snippet, domain, position, the query that found it). It reads that evidence
+ * for what it reveals about the audience — who they are, what they need, and
+ * how that should inform paid acquisition and positioning. It never proposes
+ * contacting anyone, and it must not assert facts nobody retrieved, such as
+ * member counts, activity levels or posting rules.
  */
-
-const APPROACHES: SuggestedApproach[] = [
-  "direct_post",
-  "educational_post",
-  "moderator_request",
-  "community_partnership",
-  "do_not_post",
-];
 
 export type ScoredWebCandidate = WebResult & {
   audienceFit: number; // DERIVED server-side from the three matches below
@@ -49,8 +43,18 @@ export type ScoredWebCandidate = WebResult & {
   pageType: PageType; // AI (URL-derived where the URL is unambiguous)
   actionability: Actionability; // AI, then enforced server-side
   relevanceReason: string; // AI, grounded in the snippet
-  outreachAngle: string; // AI
-  suggestedApproach: SuggestedApproach; // AI, forced to do_not_post for research
+  /** What this source suggests about the audience. AI INFERENCE. */
+  audienceSignal: string;
+  /** The need or frustration visible in the evidence. AI INFERENCE. */
+  painPoint: string;
+  /** How this should change acquisition strategy — never an outreach action. */
+  growthAction: string;
+  /**
+   * Internal engagement-suitability classification, derived server-side from
+   * actionability. It is not shown to the customer and is not an instruction
+   * to contact anyone; the recommendation gate reads it.
+   */
+  suggestedApproach: SuggestedApproach;
 };
 
 /**
@@ -93,8 +97,9 @@ type ScoreRow = {
   pageType?: unknown;
   actionability?: unknown;
   relevanceReason?: unknown;
-  outreachAngle?: unknown;
-  suggestedApproach?: unknown;
+  audienceSignal?: unknown;
+  painPoint?: unknown;
+  growthAction?: unknown;
 };
 
 /** Coerce model output into the exact scored shape, dropping invented claims. */
@@ -114,9 +119,13 @@ export function normalizeScoreRows(input: unknown, results: WebResult[]): Scored
     .map((result, i): ScoredWebCandidate => {
       const row = byIndex.get(i);
       const reason = stripUnsupportedClaims(text(row?.relevanceReason, 400));
-      const approach = APPROACHES.includes(row?.suggestedApproach as SuggestedApproach)
-        ? (row!.suggestedApproach as SuggestedApproach)
-        : "do_not_post";
+      // Derived, never requested: the model is not asked how to approach a
+      // page, so it cannot recommend contacting anyone. A page that is not
+      // clearly a live discussion stays "do_not_post" by default.
+      const approach: SuggestedApproach =
+        normalizeActionability(row?.actionability) === "actionable"
+          ? "educational_post"
+          : "do_not_post";
 
       // The URL is retrieved data, so an unambiguous URL shape beats a guess.
       const enforced = enforceActionability({
@@ -154,7 +163,9 @@ export function normalizeScoreRows(input: unknown, results: WebResult[]): Scored
           (result.snippet
             ? `Matched the search "${result.sourceQuery}"; judge relevance from the snippet.`
             : `Matched the search "${result.sourceQuery}".`),
-        outreachAngle: stripUnsupportedClaims(text(row?.outreachAngle, 400)),
+        audienceSignal: stripUnsupportedClaims(text(row?.audienceSignal, 300)),
+        painPoint: stripUnsupportedClaims(text(row?.painPoint, 300)),
+        growthAction: stripUnsupportedClaims(text(row?.growthAction, 300)),
         suggestedApproach: enforced.suggestedApproach as SuggestedApproach,
       };
     })
@@ -259,15 +270,25 @@ export async function scoreWebCandidates(
     `"rejectionReason": string (empty if it IS a good fit), ` +
     `"pageType": "${PAGE_TYPES.join("|")}", ` +
     `"actionability": "${ACTIONABILITIES.join("|")}", ` +
-    `"relevanceReason": string, "outreachAngle": string (how to be genuinely ` +
-    `useful there, not an ad; for research_only say what the page teaches ` +
-    `about the audience), "suggestedApproach": "${APPROACHES.join("|")}" } ] }`;
+    `"relevanceReason": string, ` +
+    `"audienceSignal": string (ONE sentence: what this source suggests about ` +
+    `who the audience is and what they are doing), ` +
+    `"painPoint": string (ONE sentence: the need or frustration visible in the ` +
+    `evidence, in the words these people actually use; empty if none is ` +
+    `visible), ` +
+    `"growthAction": string (ONE sentence: how this evidence should change ` +
+    `acquisition strategy — an ad angle, a search-intent idea, a positioning ` +
+    `or value-proposition change, a message to test, or an audience hypothesis ` +
+    `to validate. NEVER an instruction to post, comment, message, contact or ` +
+    `reply anywhere) } ] }`;
 
   const raw = await chatJSON<{ results?: ScoreRow[] }>(
-    "You assess public web pages as potential audience-acquisition locations. " +
-      "You separate whether an audience is present from whether it can be " +
-      "engaged there. You never invent facts you were not given. Respond ONLY " +
-      "with JSON.",
+    "You are a market and audience research analyst. You read public web " +
+      "search evidence to work out who a product's users are, what they need " +
+      "and how that should inform paid acquisition, positioning and " +
+      "messaging. You never recommend posting, commenting, messaging or " +
+      "contacting anyone, and you never invent facts you were not given. " +
+      "Respond ONLY with JSON.",
     user
   );
   return normalizeScoreRows(raw, results);

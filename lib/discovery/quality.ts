@@ -120,35 +120,6 @@ export function gradeOpportunity(input: {
   return { quality: "weak_match", audienceFit };
 }
 
-/**
- * The single source of truth for "may this candidate be turned into a post and
- * a tracking link?".
- *
- * Being a community-shaped URL is not enough — a page can be a real discussion
- * and still be the wrong crowd, or carry an explicit do_not_post. Every
- * condition below must hold, and anything missing or ambiguous (including rows
- * stored before this gate existed) fails closed.
- *
- * The server calls this before creating anything; the UI is given its result
- * so the button can never disagree with what the server will allow.
- */
-export function canPrepareCandidate(input: {
-  actionability: Actionability;
-  opportunityQuality: OpportunityQuality;
-  contextMatch: ContextMatch;
-  audienceMatch: number;
-  problemMatch: number;
-  suggestedApproach: string;
-}): boolean {
-  return (
-    input.opportunityQuality === "strong_opportunity" &&
-    input.actionability === "actionable" &&
-    input.suggestedApproach !== "do_not_post" &&
-    input.contextMatch !== "mismatch" &&
-    normalizeMatchScore(input.audienceMatch) >= MIN_AUDIENCE_MATCH &&
-    normalizeMatchScore(input.problemMatch) >= MIN_PROBLEM_MATCH
-  );
-}
 
 /** Ranking for the UI: quality first, then fit. Google position is provenance. */
 export function qualityRank(quality: OpportunityQuality): number {
