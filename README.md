@@ -1,548 +1,1214 @@
 # AI Growth Kit
 
-**A growth agent for people who can build software but not distribute it.**
+**An AI Growth Director for people who can build software but not distribute it.**
 
-You give it your app. It works out who the app is for, recommends where to
-promote it, gathers real public web evidence about those people — what they
-need and the words they use — and then, in an isolated Google Ads test
-environment, creates a real advertising campaign resource and asks Google to
-confirm that it exists.
+Give AI Growth Kit a mobile app. It works out who the product is for, researches
+real market and audience signals, recommends an acquisition direction, turns that
+decision into an executable campaign proposal, and connects it to real
+distribution infrastructure.
 
-**Production:** https://ai-growth-kit-695.netlify.app
-**Judge sandbox (no signup):** https://ai-growth-kit-695.netlify.app/demo
+The hackathon vertical slice proves this workflow end to end:
 
-**Who it's for:** indie mobile developers, solo founders, bootstrapped founders,
-and small software teams with no growth department.
+```text
+REAL APP
+→ REAL PRODUCT ANALYSIS
+→ REAL WEB RESEARCH
+→ AI GROWTH DECISION
+→ HUMAN APPROVAL
+→ REAL GOOGLE ADS API TEST EXECUTION
+→ GOOGLE-GENERATED RESOURCE
+→ FRESH PROVIDER VERIFICATION
+```
 
-**The problem:** building software got dramatically faster. Distribution didn't.
+**Production:** [https://ai-growth-kit-695.netlify.app](https://ai-growth-kit-695.netlify.app)  
+**Public judge demo — no signup:** [https://ai-growth-kit-695.netlify.app/demo](https://ai-growth-kit-695.netlify.app/demo)
 
-**Why the Google Ads proof matters:** most demos stop at advice. This one crosses
-into a real external platform: it authenticates against the Google Ads API,
-creates a campaign budget and an App Campaign, and returns a Campaign ID that
-Google generated. You can press **Verify with Google again** and watch a fresh
-query go back to Google. It's a real API resource — and it is paused, has no ad
-creatives, and lives in a test account that cannot serve ads or spend money.
+**Who it is for:** indie mobile developers, solo founders, bootstrapped founders
+and small software teams without a dedicated growth department.
+
+**The problem:** building software became dramatically faster. Distribution did not.
 
 ---
 
 ## The problem
 
-Modern AI-assisted development has made building software much faster and much
-cheaper. A single developer can now ship something genuinely useful in a
-weekend.
+Modern AI-assisted development has made software dramatically faster and cheaper
+to build.
 
-Getting it in front of users has not become any easier.
+A solo developer can now create a useful product in days or weeks, but getting
+that product in front of the right users still requires a completely different
+set of skills.
 
-A developer with a working product still has to manually:
+After shipping an app, a founder still has to:
 
-- figure out positioning
-- define the audience
-- pick acquisition channels
-- hunt for relevant communities and websites
-- write promotional content
-- configure advertising tools
-- publish
-- track what happened
-- decide what to do next
+- understand positioning
+- define the real target audience
+- choose acquisition channels
+- research demand and audience language
+- find relevant market signals
+- turn those signals into campaign strategy
+- configure advertising infrastructure
+- create campaign resources
+- verify that execution actually happened
+- later measure results and decide what to change
 
-Each of those is a different tool, a different skill, and a different afternoon.
+These tasks are spread across different tools and traditionally require
+marketing, research and advertising expertise.
 
-And it isn't a one-time cost. It repeats for every new product, every launch,
-every feature, every new audience, and every new market. That's what makes it a
-recurring problem rather than a chore you finish once.
+The result is a new bottleneck:
+
+> **Software creation has become accessible to small teams. Professional
+> distribution has not.**
+
+AI Growth Kit is built around that gap.
+
+---
 
 ## The solution
 
-AI Growth Kit does this work as one connected flow that starts from the app
-itself, not from a blank marketing prompt.
+AI Growth Kit acts as an **AI Growth Director** for an application.
 
-Because it begins with the real store listing, every later step inherits context:
-the audience analysis feeds the channel recommendations, which feed the search
-queries, which feed the scoring of what it finds, which feeds the audience
-evidence behind the campaign proposal.
+Instead of starting from a blank marketing prompt, the system starts from the
+actual product.
 
-## Product flow
+A real Google Play listing provides the initial context. That context flows into
+product understanding, audience reasoning, external research and finally an
+executable growth experiment.
 
+The product is designed around one connected loop:
+
+```text
+Understand → Research → Decide → Execute → Verify
 ```
-App link → Understand → Promote → Discover → Execute
+
+Longer term, verified campaign performance can extend that loop into:
+
+```text
+Measure → Optimize
 ```
 
-| Step | What happens |
+Measurement-driven optimization is not implemented yet and is not presented as
+if it were.
+
+---
+
+## Current product flow
+
+```text
+Google Play URL
+      ↓
+UNDERSTAND
+      ↓
+PLAN / PROMOTE
+      ↓
+DISCOVER
+      ↓
+CAMPAIGN PROPOSAL
+      ↓
+HUMAN APPROVAL
+      ↓
+EXECUTE
+      ↓
+VERIFY
+```
+
+| Stage | What happens |
 | --- | --- |
-| **Understand** | Imports the real Google Play listing and works out the audience, the problem the app solves, and its positioning. |
-| **Promote** | Recommends acquisition channels for this specific app, with the reasoning for each. |
-| **Discover** | Searches the public web for evidence about the people who have this problem — who they are, what they need, and the words they use — and turns it into growth insight. Research only. |
-| **Execute** | Creates a real, paused Google Ads App Campaign in an isolated test account and proves it with a fresh read from Google. |
+| **Understand** | Imports the real Google Play listing and analyzes the audience, problem, positioning and value proposition. |
+| **Plan / Promote** | Recommends acquisition channels and growth direction for this specific application. |
+| **Discover** | Searches the public web for real market and audience evidence and turns it into audience signals, pain points and growth actions. |
+| **Campaign Proposal** | Converts product understanding and external evidence into a concrete acquisition experiment. |
+| **Execute** | In the public demo, creates a real Google Ads App Campaign resource in Google's isolated TEST environment. |
+| **Verify** | Performs a fresh Google Ads API read-back so the provider — not our own database — confirms the campaign resource. |
 
-First-party tracking infrastructure (`TrackingLink`, `TrackingEvent`, the
-`/r/:slug` redirect) exists underneath and still records real clicks, but
-measurement is not currently one of the product's user-facing stages. The
-longer-term direction adds attribution and then **Optimize** — acting on
-measured results automatically. Neither is implemented, and nothing in the
-product pretends otherwise.
+AI-generated recommendations and retrieved external facts are deliberately kept
+separate.
 
-## Try it live
+---
 
-There are two ways in, and they show different things.
+# Try it live
 
-### The public judge sandbox — `/demo`
+## Public judge demo — `/demo`
 
-No signup, no email, no Google account, no shared password. Paste **any** public
-Google Play app URL — nothing is hardcoded or preloaded — and one button runs the
-real pipeline:
+The public demo requires:
 
+- no signup
+- no email
+- no Google Ads account
+- no shared credentials
+
+Open:
+
+**[https://ai-growth-kit-695.netlify.app/demo](https://ai-growth-kit-695.netlify.app/demo)**
+
+Paste any valid public Google Play application URL and press:
+
+**Start AI Growth Director**
+
+Nothing is hardcoded to one demonstration application.
+
+The server then performs the real pipeline:
+
+```text
+Google Play import
+→ Understand & Plan
+→ Discover
+→ Campaign Proposal
 ```
-Google Play URL → import → understand → plan → discover
-   → campaign proposal → [your approval] → Google Ads TEST execution
-   → fresh Google verification
+
+The system uses:
+
+- real Google Play listing data
+- a real OpenAI model call for product analysis
+- real DataForSEO-backed web research
+- AI reasoning over the product and retrieved evidence
+
+Completed stages are persisted server-side.
+
+If a provider fails, the workflow reports the failure rather than replacing it
+with prepared success data.
+
+---
+
+## The explicit execution step
+
+Automation deliberately stops before modifying Google Ads.
+
+The user must separately choose:
+
+**Execute TEST campaign**
+
+That action uses the real Google Ads API against an isolated Google Ads TEST
+hierarchy.
+
+The current judge flow creates:
+
+1. a real `CampaignBudget`
+2. a real Google App Campaign
+3. status forced to `PAUSED`
+4. a Google-generated Campaign ID
+5. a fresh Google Ads API read-back
+
+The user can then press:
+
+**Verify with Google again**
+
+That issues another provider query instead of trusting a cached status from our
+database.
+
+---
+
+# Why the Google Ads proof matters
+
+Most AI marketing products can generate advice.
+
+The important transition for AI Growth Kit is:
+
+```text
+recommendation
+        ↓
+authorized external action
+        ↓
+independently verifiable provider result
 ```
 
-Each stage is its own server round trip, so a stage only shows as complete after
-the operation behind it genuinely returned. The listing comes from the store,
-the analysis from the model, the evidence from a live DataForSEO search. If a
-provider fails, the pipeline stops and says so — there is no prepared fallback
-data standing in for a live result.
+The Google Ads campaign ID displayed in the demo is generated by Google.
 
-Automation stops at the campaign proposal. Creating anything in Google Ads takes
-a second, explicit click, and that execution is TEST-only: one per demo session,
-counted in the database rather than trusted to a disabled button, and guarded by
-a kill switch and hourly caps. Public `/demo` can never use a customer's
-production credential, and it stays TEST-only regardless of what access level
-the developer token is later granted.
+The campaign is not simulated.
 
-### The full product — sign up
+The provider read-back is not simulated.
 
-Your own app, your own project. Real Google Play import, real analysis, real web
-discovery. Inside the project, Step 3 also offers the same safe Google Ads test
-execution — using your app's package ID, still in the
-isolated test account.
+The TEST environment itself is real.
 
-## What's working today
+What the TEST environment deliberately cannot produce is:
 
-- Landing page, signup and login, tenant-isolated projects
-- Google Play app import with real store data
-- Product understanding, audience and positioning analysis
-- Channel recommendations with reasoning
-- Market and audience intelligence backed by real DataForSEO web search
-- Relevance scoring, including a refusal to recommend weak fits
-- Audience signals, pain points and recommended growth actions from real evidence
-- Google Ads OAuth connection, account hierarchy discovery, account selection,
-  encrypted refresh-token storage — **read access only**
-- Real Google Ads TEST execution: campaign budget, App Campaign, Google-issued
-  Campaign ID, forced PAUSED, fresh read-back, and re-verification on demand
-- Budget ceilings, idempotency, rate limits, and daily execution caps
+- advertising delivery
+- real spend
+- paid impressions
+- paid clicks
+- installs caused by the campaign
+- conversions
+- Cost Per Install (CPI)
+- Return On Ad Spend (ROAS)
 
-## Real Google Ads execution
+We prefer a smaller result that can be independently verified over fabricated
+performance numbers.
 
-The sandbox and the signed-in project both use the same execution engine. The
-only thing that differs between an execution path and any future customer path
-is which credential is presented.
+---
 
-What actually happens when you press the button:
+# TEST execution versus production execution
 
-1. Service-account authentication against Google Ads API v25
-2. Google is asked whether the target account has `test_account = true` — if the
-   answer is no, execution is refused
-3. The approved budget is clamped to a server-side ceiling
-4. A `CampaignBudget` is created through the API
-5. An App Campaign is created — `MULTI_CHANNEL`, `APP_CAMPAIGN`, status forced to
-   `PAUSED`
-6. A fresh Google Ads Query Language read-back retrieves what Google actually
-   stored
-7. The proof is persisted as a `GoogleAdsExecution` record
+There are two deliberately separate Google Ads architectures.
 
-The Campaign ID you see is generated by Google, not by us. **Verify with Google
-again** issues another live query — our database is not consulted for the
-answer.
+## 1. Public TEST execution
 
-### Campaign completeness
+Used by `/demo` and the existing safe test workflow.
 
-Being precise about what the resource is:
+```text
+DemoServiceAccountAuthProvider
+        ↓
+Google Ads TEST advertiser
+        ↓
+CampaignBudget
+        ↓
+App Campaign
+        ↓
+PAUSED
+        ↓
+Google read-back
+```
 
-| Real | Not created |
-| --- | --- |
-| `CampaignBudget` | Ad group |
-| App Campaign resource | App Ad |
-| Google-issued Campaign ID | Text assets |
-| `PAUSED` status | Image assets |
-| `MULTI_CHANNEL` / `APP_CAMPAIGN` | Video assets |
-| Fresh Google read-back | — |
+Before any TEST mutation, Google is asked to confirm:
 
-Because there is no ad group and there are no creatives, the resource is not a
-fully serving campaign. Nothing is submitted for serving, nothing is shown to
-anyone, and no advertising money moves.
+```text
+customer.test_account = true
+```
 
-## Why the hackathon demo uses no real ad spend
+If the account is not a TEST account, execution is refused.
 
-This is a deliberate decision, not a missing feature.
+The public demo cannot switch itself to a production customer credential.
 
-Every execution in this project runs inside Google Ads **test** accounts. Test
-accounts cannot serve advertising and cannot spend money — that is what makes it
-safe to put a real execution button on a public page that strangers can press.
+---
 
-So the demo deliberately does not show:
+## 2. Production customer execution backend
 
-- real ad serving
-- paid impressions or paid clicks
-- campaign spend
-- paid installs or conversions
-- cost per install (CPI)
-- return on ad spend (ROAS)
-- revenue attribution
+A separate production execution architecture now exists in the codebase.
 
-We could have shown a dashboard full of impressive numbers. We'd rather show a
-smaller real result that you can independently verify than fabricate performance
-metrics for a better-looking demo.
+It is intentionally **not exposed through the customer-facing frontend yet**.
 
-## Meaningful AI, deterministic safety
+The backend is structured around:
 
-AI does real work here — it isn't a label on a form.
+```text
+Authenticated customer
+        ↓
+Google OAuth
+        ↓
+Customer advertiser account
+        ↓
+Production account verification
+        ↓
+Approved campaign definition
+        ↓
+CampaignBudget
+        ↓
+Campaign
+        ↓
+AdGroup
+        ↓
+AdGroupAd / AppAdInfo
+        ↓
+PAUSED
+        ↓
+Provider verification
+        ↓
+Separate launch approval
+        ↓
+ENABLED
+        ↓
+Manual PAUSE
+```
 
-| Where | What the model does |
-| --- | --- |
-| Understand | Reads the store listing and infers audience, problem, and value proposition |
-| Promote | Chooses which channels fit this specific app, and explains why |
-| Discover | Generates the search queries, judges whether the people in each result are actually your users, and turns that evidence into audience signals, pain points and growth actions |
+This is deliberately a different execution engine from the public TEST path.
 
-The model currently used throughout is **`gpt-4o-mini`** via the OpenAI API.
-There is no multi-model routing and no autonomous optimization loop; claiming
-either would be untrue.
+A production customer path cannot use the demo service-account credential.
 
-The interesting part is what the model is *not* allowed to do:
+---
+
+# Google Ads API Basic Access
+
+There is currently one external limitation:
+
+> **Our Google Ads developer token currently has Test Account Access. We have
+> applied for Google Ads API Basic Access, and approval is still pending.**
+
+Until Google grants Basic Access, AI Growth Kit cannot use the Google Ads API to
+modify normal production advertising accounts.
+
+For that reason, production mutation is disabled server-side.
+
+Two independent server feature gates exist:
+
+```text
+GOOGLE_ADS_PRODUCTION_MUTATION_ENABLED=false
+GOOGLE_ADS_PRODUCTION_LAUNCH_ENABLED=false
+```
+
+Both ship disabled.
+
+The second gate is deliberately separate from the first:
+
+> Permission to create a PAUSED campaign is not permission to start spending
+> money.
+
+There is no separate "Basic Access token." Google changes the access level of
+the existing developer token.
+
+---
+
+# Production Google Ads backend
+
+The current repository contains the production execution core behind those
+server-side gates.
+
+Implemented backend components include:
+
+- customer Google OAuth
+- encrypted OAuth refresh-token storage
+- advertiser hierarchy discovery
+- advertiser selection
+- `UserOAuthAuthProvider`
+- production/customer credential separation
+- fresh production account validation
+- rejection of Google Ads manager accounts as campaign targets
+- rejection of TEST accounts on the production path
+- deterministic advertising-budget controls
+- AI-generated text-ad proposals
+- deterministic text-asset validation
+- production execution persistence
+- CampaignBudget creation
+- Campaign creation
+- AdGroup creation
+- App Ad / `AppAdInfo` creation
+- initial campaign status `PAUSED`
+- provider verification
+- separate launch route
+- sparse `PAUSED → ENABLED` campaign-status mutation
+- manual pause route
+- tenant ownership checks
+- execution claims for concurrency protection
+- partial-execution persistence
+- server-side mutation and launch kill switches
+- sanitized provider errors
+- automated tests that do not make live Google Ads mutations
+
+The production path is **implemented locally but not live-provider-verified
+against a normal advertiser account** because Google Ads API Basic Access is
+still pending.
+
+Additional safety hardening is being completed before those feature gates are
+ever enabled.
+
+No production Google Ads campaign has been created or launched by this code.
+
+---
+
+# Production campaign safety model
+
+Advertising is a money-moving boundary, so AI is not given final authority.
+
+The architecture follows this principle:
 
 > **AI decides what may be useful. Deterministic backend rules decide what is
-> allowed to happen.**
+> actually allowed to happen.**
 
-These rules are ordinary server code, and they override any model output:
+Before a production mutation can occur, server code is responsible for
+confirming conditions such as:
 
-- A hard daily budget ceiling, applied before any request is built
-- The approved budget is treated as a request and clamped to that ceiling
-- The advertising account is resolved server-side; the browser cannot supply or
-  override a customer ID
-- Google is asked to confirm `test_account = true` before any mutation
-- Campaign status is forced to `PAUSED` — the string `ENABLED` appears nowhere in
-  the engine
-- Database-backed idempotency: one execution per demo session, one per project
-- Per-client rate limiting and a global daily execution cap
-- An ambiguous failure is never closed as "failed" — the system asks Google
-  whether a campaign was created before allowing another attempt
-- Provider error bodies are never echoed to the browser
+- authenticated user
+- tenant ownership
+- customer OAuth credential
+- selected advertiser
+- advertiser is not a manager account
+- advertiser is not a TEST account
+- production mutation feature gate enabled
+- valid approved advertising assets
+- configured average daily budget within server policy
+- explicit campaign-creation approval
+- execution state claimed against concurrent mutation
 
-## Who it's for
+Creation and launch are separate decisions.
 
-Independent software creators and small teams:
+A production campaign is designed to be created:
+
+```text
+PAUSED
+```
+
+before any later launch operation.
+
+Launching requires a second approval and a second feature gate.
+
+The model cannot override either feature gate.
+
+---
+
+# Average daily budget
+
+Google Ads `CampaignBudget.amount_micros` represents an **average daily budget**.
+
+AI Growth Kit therefore does not describe that value as a guaranteed maximum
+amount that can be spent on every individual calendar day.
+
+The product instead enforces a deterministic ceiling on the **configured average
+daily budget value sent to Google**.
+
+Conceptually:
+
+```text
+requested average daily budget
+        ↓
+server validation
+        ↓
+server ceiling
+        ↓
+approved configured average daily budget
+        ↓
+Google Ads
+```
+
+A model recommendation cannot override that server limit.
+
+---
+
+# AI-generated advertising text
+
+The production backend also contains a constrained AI ad-copy proposal layer.
+
+The model is given product and research context and may propose:
+
+- headlines
+- descriptions
+
+It does **not** decide:
+
+- advertiser identity
+- Google customer ID
+- execution permissions
+- campaign status
+- feature gates
+- unrestricted budget values
+
+Generated text is passed through deterministic validation before it can become
+an advertising asset.
+
+Current rules include:
+
+- Google Ads text-length limits
+- minimum and maximum asset counts
+- duplicate removal
+- invisible/control-character cleanup
+- no silent mid-word truncation
+- filtering of unsupported model-generated claims
+
+The executable provider payload is constructed by backend code, not by the
+language model.
+
+---
+
+# What's working today
+
+## Live product / public judge flow
+
+- Landing page
+- Signup and login
+- Tenant-isolated projects
+- Google Play application import
+- Real store listing data
+- Product understanding
+- Audience analysis
+- Positioning and value proposition analysis
+- Channel recommendations
+- Real DataForSEO-backed web discovery
+- Relevance and actionability scoring
+- Audience signals
+- Pain-point extraction
+- Recommended growth actions
+- Public no-login `/demo`
+- Server-persisted demo workflow
+- Real Google Ads TEST authentication
+- TEST-account verification
+- CampaignBudget creation
+- App Campaign creation
+- Google-generated Campaign ID
+- forced `PAUSED`
+- fresh Google provider read-back
+- Verify with Google again
+- database-backed abuse protections and execution limits
+
+## Implemented in the repository behind production gates
+
+- Customer Google OAuth
+- encrypted refresh tokens
+- Google Ads account discovery
+- account selection
+- customer OAuth auth provider
+- production account validation
+- manager-account rejection
+- TEST-account rejection on production path
+- production CampaignBudget provider path
+- production Campaign provider path
+- production AdGroup provider path
+- production App Ad provider path
+- production verification route
+- separate launch route
+- manual pause route
+- separate mutation and launch feature gates
+- production execution persistence
+- deterministic ad-copy validation
+- AI-assisted text-asset proposals
+
+## Not live-verified yet
+
+The production path cannot be live-tested against a normal advertiser account
+until Google grants Google Ads API Basic Access.
+
+That limitation comes from the current access level of the developer token, not
+from the public TEST environment.
+
+---
+
+# Meaningful AI, deterministic safety
+
+AI is used as a reasoning layer rather than simply as a text-generation feature.
+
+| Area | What AI does |
+| --- | --- |
+| **Understand** | Interprets the app listing and infers audience, problem and value proposition |
+| **Plan / Promote** | Recommends acquisition directions and explains why |
+| **Discover** | Generates research queries and scores whether retrieved evidence actually matches the target audience |
+| **Growth intelligence** | Converts external evidence into audience signals, pain points and recommended growth actions |
+| **Production ad proposal** | Produces candidate advertising headlines and descriptions that deterministic backend rules validate before execution |
+
+The model currently used by the application is:
+
+**`gpt-4o-mini`**
+
+via the OpenAI API.
+
+There is currently:
+
+- no multi-model routing
+- no autonomous performance optimization loop
+- no AI authority to bypass server execution rules
+
+Those are not presented as implemented.
+
+---
+
+# Evidence versus inference
+
+AI Growth Kit deliberately separates external evidence from model reasoning.
+
+Typical provenance categories are:
+
+- **RETRIEVED / OBSERVED** — came from the store or external web research
+- **AI GENERATED / AI INFERENCE** — interpretation or recommendation produced by the model
+- **DEMO** — intentionally synthetic demonstration data where such fixtures are used
+
+A retrieved fact is not presented as an AI discovery.
+
+An AI recommendation is not presented as a provider fact.
+
+A provider result is not marked successful until the external provider returns
+it.
+
+---
+
+# No fabricated performance metrics
+
+The current product does not invent:
+
+- campaign spend
+- paid impressions
+- paid clicks
+- campaign-generated installs
+- attributed conversions
+- Cost Per Install
+- Return On Ad Spend
+- revenue attribution
+
+Those numbers require real campaign delivery and attribution infrastructure.
+
+They do not exist in the current TEST environment and therefore are not shown.
+
+First-party click-tracking infrastructure exists in the codebase, including:
+
+```text
+TrackingLink
+TrackingEvent
+/r/[slug]
+```
+
+but measurement is not currently a primary user-facing stage.
+
+---
+
+# Why the hackathon demo uses TEST advertising
+
+Putting unrestricted production advertising behind a public hackathon button
+would be unsafe.
+
+Google Ads TEST accounts solve that problem.
+
+They allow AI Growth Kit to demonstrate:
+
+- real authentication
+- real API mutation
+- real Google resources
+- real provider-generated identifiers
+- real read-back
+
+without:
+
+- serving advertising
+- charging an advertiser
+- exposing a customer's account
+- creating public financial risk
+
+This is why the public judge workflow uses the isolated TEST path even though a
+separate production architecture exists in the repository.
+
+---
+
+# Who it's for
+
+AI Growth Kit is primarily designed for:
 
 - indie mobile developers
 - solo founders
 - bootstrapped founders
-- first-time founders
-- small software teams with no dedicated growth person
+- first-time software founders
+- small software teams without a dedicated growth specialist
 
-The situation that defines them: **they can build the product; distribution is
-the bottleneck.**
+The defining situation is:
 
-Why they might pay: the alternatives are founder hours spread across a dozen
-disconnected tools, learning several specialist advertising systems, hiring
-freelancers, or hiring a growth specialist long before the company can justify
-the cost.
+> **They can build the product. Distribution is the bottleneck.**
 
-AI Growth Kit does not replace a professional marketing team. It aims to make
-the first steps of that work possible without one.
+Today their alternatives usually involve:
 
-## Why this matters
+- spending founder hours across disconnected marketing tools
+- learning specialist advertising systems
+- hiring freelancers
+- hiring a growth specialist earlier than the business can justify
 
-AI-assisted development is putting software creation within reach of far more
-people and far smaller teams. Access to distribution expertise has not spread
-the same way.
+AI Growth Kit does not claim to replace an experienced marketing organization.
 
-A genuinely useful product can still go nowhere because its creator doesn't know
-performance marketing, can't afford an agency, can't hire a growth team, doesn't
-know where the first users are, or simply runs out of hours switching between
-marketing tools.
+Its goal is to make structured growth work available to teams that do not have
+one yet.
 
-That gap falls hardest on solo developers, small teams, bootstrapped and
-first-time founders, and developers working outside the major startup
-ecosystems, where informal access to this knowledge is thinner.
+---
 
-**Without AI Growth Kit:** a founder researches audience, positioning,
-communities, channels, content, ad setup, and tracking by hand, in seven
-different places.
+# Why this matters
 
-**With AI Growth Kit:** one product carries context from the application itself
-through research, promotion, authorized action, and measurement.
+AI-assisted development is expanding the number of people capable of creating
+software.
 
-We're not claiming social outcomes we haven't demonstrated. The claim is
-narrower and checkable: growth tooling that currently assumes a marketing
-department should be usable by someone who doesn't have one.
+Distribution expertise has not expanded at the same rate.
 
-## Business model
+A technically strong product can still fail to reach users because its creator:
 
-Stated plainly, because judges should not have to guess:
+- does not understand performance marketing
+- does not know which audience to prioritize
+- cannot afford an agency
+- does not have a growth team
+- has no time to learn several acquisition platforms
+- cannot connect research, strategy and execution into one repeatable system
 
-**Not implemented today:** Stripe, paid subscriptions, billing, team and invite
-functionality. None of it is in the code, and none of it is presented as live.
+AI Growth Kit tries to make that workflow accessible through one product that
+carries context from the application itself into research and authorized
+execution.
 
-The planned model is SaaS. Tiers below are **conceptual** — nothing is
-purchasable:
+---
 
-| Tier (conceptual) | Intended shape |
+# Business model
+
+AI Growth Kit is intended to become a subscription **Software as a Service
+(SaaS)** product.
+
+There is currently:
+
+- no Stripe integration
+- no paid subscription system
+- no production billing
+- no team/invite system
+- no paying customers
+- no revenue
+
+Those facts are intentionally not hidden.
+
+The intended pricing structure is conceptual:
+
+| Tier | Intended shape |
 | --- | --- |
-| **Free / trial** | One project, limited analysis and discovery — enough to judge whether the workflow saves you time |
-| **Starter** | More projects and deeper audience research — aimed at indie developers and solo founders |
-| **Pro** | Larger limits, automation, and advanced execution as those capabilities become production-ready; collaboration later |
+| **Free / Trial** | Limited projects and enough of the core workflow to evaluate the product |
+| **Starter** | More projects, deeper research and production growth capabilities |
+| **Pro** | Higher limits, experimentation, optimization and collaboration as those capabilities become production-ready |
 
-On advertising money: **AI Growth Kit charges for the software, not the ad
-spend.** Advertising budgets stay directly between the customer and the ad
-platform. We never need to hold a customer's advertising money, which removes a
-whole category of financial and regulatory risk from the business.
+Advertising spend remains separate from the SaaS subscription.
 
-## Path to first revenue
+When production advertising becomes available:
 
-1. Recruit early users from indie developer, mobile developer, and bootstrapped
+```text
+Customer ↔ Google
+```
+
+remains the billing relationship for advertising spend.
+
+AI Growth Kit charges for software and automation, not for holding the
+customer's advertising funds.
+
+---
+
+# Path to first revenue
+
+1. Recruit early users from indie developer, mobile developer and bootstrapped
    founder communities.
-2. Have them import a real app and check whether the product saves meaningful
-   time across analysis, promotion planning, and audience discovery.
-3. Convert the users who keep coming back to discovery, content preparation,
-   into an early paid subscription.
-4. Add production Google Ads execution as a higher-value paid capability once
-   production execution, campaign completeness, and attribution are ready.
-5. Expand to further acquisition channels based on what customers actually use,
-   rather than building every ad network up front.
+2. Let them import real applications and evaluate whether the workflow saves
+   meaningful research and growth-planning time.
+3. Validate repeated use of product understanding, market intelligence and
+   acquisition planning.
+4. Enable controlled production Google Ads execution after Google Ads API Basic
+   Access and production verification are complete.
+5. Introduce paid SaaS tiers around repeated growth workflows and higher-value
+   execution.
+6. Add measurement and optimization only after real provider performance data is
+   available.
+7. Expand into additional acquisition channels based on actual customer demand.
 
-The first paying customer does not require the whole roadmap. What exists today
-— app analysis, promotion planning, audience discovery, content preparation,
-and first-party click measurement — is already useful work.
+There are no customers or revenue today.
 
-There are no customers and no revenue yet. This is the plan, not a report.
+This is the commercialization plan, not a claim about existing traction.
 
-## Why it can be sustainable
+---
 
-The impact here doesn't depend on grants or donations, because the people it
-helps are the same people who would pay for it.
+# Why the model can be sustainable
 
-A subscription can fund infrastructure, model and API usage, search provider
-costs, further integrations, and continued development. Advertising spend stays
-between customers and ad platforms, so the cost of a customer's campaigns never
-lands on us.
+The people who benefit from the product are also potential paying customers.
 
-That produces a straightforward alignment: if the product consistently saves
-small developers time or helps them make better growth decisions, they have a
-direct reason to keep paying. If it doesn't, they stop — which is the correct
-outcome.
+Subscription revenue can fund:
 
-We are not claiming profitability.
+- application infrastructure
+- model usage
+- web-research providers
+- advertising integrations
+- monitoring
+- additional acquisition channels
+- continued product development
 
-## Current vs planned
+Advertising spend does not need to pass through AI Growth Kit.
 
-**Working today:** landing page · authentication · tenant-isolated projects ·
-Google Play import · product understanding · promotion recommendations · web
-audience discovery (DataForSEO) · relevance and actionability scoring · AI
-audience and pain-point intelligence · Google Ads OAuth and read access · account
-hierarchy discovery · account selection · Google Ads TEST execution ·
-`CampaignBudget` creation · App Campaign resource creation · real Campaign ID ·
-forced `PAUSED` · Google read-back · Verify with Google again · budget safety
-controls · rate and abuse controls
+That creates a relatively direct SaaS relationship:
 
-**Planned, not built:** production customer Google Ads execution · ad group
-creation · App Ad creation · text, image and video assets · real paid serving ·
-paid campaign attribution · install, conversion and revenue attribution ·
-performance-driven autonomous optimization · live Reddit access after approval ·
-Meta Ads · TikTok Ads · Apple Search Ads · dedicated YouTube and Demand Gen ·
-Stripe billing · team and invite functionality
+> if the system repeatedly saves founders time or helps them run better growth
+> experiments, they have a reason to subscribe.
 
-### Customer Google Ads: read-only today
+We are not claiming profitability today.
 
-A customer can connect their Google Ads account through Google OAuth, and the
-product will discover their account hierarchy and let them select an account.
-Refresh tokens are encrypted at rest.
+---
 
-**That path is read-only.** A normal customer cannot yet approve and launch a
-campaign in their own production Google Ads account. Every execution in the
-product today — public sandbox and signed-in project alike — runs through a
-service account into the isolated test hierarchy.
+# Current versus planned
 
-### Discovery and Reddit
+## Working now
 
-Web discovery is live and real: DataForSEO-backed Google search, real public
-source URLs, real page titles and snippets, and scoring that judges whether the
-right people are in the conversation. Each source is read for what it reveals —
-an audience signal, a pain point, and a recommended growth action such as an ad
-angle or a positioning change. Sources that fail the audience test are shown as
-weaker evidence rather than recommended.
+- authentication
+- tenant-isolated projects
+- Google Play import
+- product understanding
+- target-audience analysis
+- acquisition-channel recommendations
+- DataForSEO-backed external research
+- audience and pain-point intelligence
+- Google Ads TEST execution
+- real `CampaignBudget`
+- real App Campaign resource
+- Google-generated Campaign ID
+- `PAUSED`
+- fresh Google verification
+- public no-login judge flow
+- first-party click-tracking backend infrastructure
 
-**Reddit is not live.** The provider is written against Reddit's official
-OAuth API, but credentials are still pending approval, so the product reports
-its status as `approval_pending` and says so in the interface. It activates when
-approved credentials exist — no code change required. Until then, no Reddit data
-is being retrieved.
+## Implemented in backend, disabled pending external approval
 
-### YouTube
+- customer OAuth production architecture
+- production advertiser validation
+- production `CampaignBudget`
+- production Campaign
+- production AdGroup
+- production App Ad / `AppAdInfo`
+- AI-generated text assets
+- deterministic ad-asset validation
+- separate create approval
+- separate launch architecture
+- manual pause architecture
+- server-side production mutation gate
+- separate production launch gate
+- persistent production execution state
 
-**Implemented:** Google App Campaign creation through the official Google Ads
-API.
+These capabilities are intentionally not exposed in the current customer-facing
+frontend.
 
-**Platform capability:** App Campaigns are `MULTI_CHANNEL`, and a complete,
-serving App Campaign may be distributed by Google across eligible Google
-surfaces, including YouTube.
+They remain disabled while Google Ads API Basic Access is pending and have not
+been live-provider-verified against a normal production advertiser.
 
-**Not implemented:** dedicated YouTube campaign management, Demand Gen, explicit
-YouTube Shorts targeting, or any YouTube publishing integration.
+## Planned, not built
 
-### Discovery is research, not outreach
+- paid campaign performance dashboard
+- paid impressions/click/spend reporting loop
+- install attribution
+- conversion attribution
+- Cost Per Install optimization
+- revenue attribution
+- automated performance-driven optimization
+- automated budget reallocation
+- production creative experimentation
+- Stripe billing
+- subscriptions
+- team/invite functionality
+- Meta Ads execution
+- TikTok Ads execution
+- Apple Search Ads execution
+- dedicated YouTube campaign management
 
-Discovery reads public web evidence and turns it into growth insight: who the
-audience is, what they need, the language they use, and how that should change
-your advertising and positioning. AI Growth Kit does not post, comment, message
-or contact anyone in the sources it finds, and it does not draft promotional
-posts for them.
+---
 
-An owned Discord publishing integration exists in the codebase but is currently
-not part of the primary user-facing growth flow.
+# Customer Google Ads connection
 
-### Measurement
+A signed-in customer can authorize Google Ads through Google OAuth.
 
-First-party tracking exists as infrastructure rather than as a product stage:
-`/r/:slug` records a real `TrackingEvent` and redirects, and the analytics
-endpoint can still read those counts. It is not surfaced in the current
-workspace, and it is kept for attribution work once production advertising is
-available.
+The current integration supports:
 
-Nothing here measures paid impressions, attributed installs, conversions, cost
-per install, return on ad spend, or revenue attribution — none of those are
-measured, and none are displayed.
+- OAuth authorization
+- encrypted refresh-token storage
+- account hierarchy discovery
+- advertiser-account selection
 
-## Measurement and provenance
+The existing customer-facing connection interface remains non-executing.
 
-Retrieved facts and AI inferences are separate fields with separate labels, all
-the way to the screen:
+There is currently **no customer-facing production campaign button**.
 
-- **RETRIEVED** — from the store listing or a search result
-- **AI GENERATED** — the model's interpretation
-- **DEMO** — fixed example data in the sandbox
+The production execution routes exist only in the backend and remain protected by
+server-side feature gates.
 
-The rule is simple: a retrieved fact is never dressed up as an AI conclusion, an
-AI conclusion is never presented as an external fact, and demo fixtures are
-never presented as live provider data.
+---
 
-**No fabricated performance metrics.** The only numbers shown are ones that were
-actually recorded: first-party click counts from the tracking redirect, and
-Google Play listing figures clearly labeled as retrieved store data — which
-describe the app, not the results of anything AI Growth Kit did.
+# Discovery and Reddit
 
-## For judges
+Web discovery is live.
 
-### A. Fastest proof — the public sandbox (about two minutes)
+AI Growth Kit uses DataForSEO-backed public web search to retrieve real:
 
-1. Open **https://ai-growth-kit-695.netlify.app/demo**
-2. No signup required
-3. Read the safety disclosures, then start the demo
-4. Review the example growth workspace
-5. Choose a market and approve a daily budget
-6. Run the test execution and watch each step report the time Google answered:
-   safety policy check → TEST account verification → budget clamp →
-   `CampaignBudget` created → App Campaign created → real Campaign ID →
-   `PAUSED` → fresh Google read-back
-7. Press **Verify with Google again** and watch a new query go to Google
+- URLs
+- titles
+- snippets
+- audience evidence
 
-Google test accounts cannot serve ads or spend real money, which is exactly why
-this button can be public.
+The AI then evaluates whether the source actually contains the relevant audience
+and turns useful evidence into:
 
-### B. The full product
+- audience signals
+- pain points
+- growth actions
+- advertising or positioning hypotheses
 
-1. Open **https://ai-growth-kit-695.netlify.app**
-2. Create an account
-3. Add your app from its Google Play URL and run the analysis
-4. Walk through Understand → Promote → Discover
-5. Step 3 also offers the same safe Google Ads test execution for your app
-6. The Google Ads connection card shows the read-only customer integration
+Discovery is research, not outreach.
 
-Production customer campaign execution is planned and is not presented as live.
+AI Growth Kit does not automatically:
 
-## Technical architecture
+- post to communities
+- comment
+- send unsolicited messages
+- contact people found through research
 
-Next.js 16 (App Router) · React 19 · TypeScript · Prisma 6 · Neon PostgreSQL ·
-Auth.js v5 with credentials, bcrypt password hashing and JWT sessions · OpenAI
-API · DataForSEO · Google Ads API v25 · Discord webhook publisher · deployed on
-Netlify · source on GitHub.
+Reddit's dedicated Data API integration is not currently live because approval
+is still pending.
 
-Two design constraints shaped a lot of the code. Serverless functions have short
-timeouts, so anything slow is split into submit-and-poll phases with resumable
-signed tickets — a paid search is never bought twice because a page reloaded.
-And the production build stays on webpack (`next build --webpack`); Turbopack
-produced a broken Prisma client in the serverless runtime.
+No live Reddit data is presented when those credentials are unavailable.
 
-## Security
+---
 
-- Authentication with ownership gates on every project-scoped route
-- Tenant isolation: a project is only reachable by the account that owns it
-- Google OAuth state is an HMAC-signed payload bound to the user and an expiry
-- Refresh tokens are encrypted at rest with AES-256-GCM
-- Secrets live in Netlify runtime environment variables; none are committed to
-  Git, and `.env*` has never been in the repository
-- Execution is confined to the isolated Google Ads test hierarchy, confirmed
-  with Google on every run
-- Campaign status forced to `PAUSED`; hard server-side budget ceiling
-- The target advertising account is server-controlled and cannot be supplied by
-  a browser
-- Database-backed idempotency, per-client rate limiting, global daily cap
-- Provider responses are sanitized: no customer IDs, resource names, tokens or
-  credentials reach the browser
+# YouTube
 
-## Known limitations
+Google App Campaigns use Google's multi-channel advertising infrastructure.
 
-- Customer Google Ads is read-only; production execution is not enabled
-- Test campaigns have no ad group and no creatives, so they cannot serve
-- Reddit discovery is pending API approval
-- Measurement is not a user-facing stage; click tracking exists only as backend infrastructure
-- No billing, subscriptions, or team features
-- Rate limits and caps are enforced in the database and unit-tested, but have not
-  been load-tested
+A complete serving App Campaign may be distributed by Google across eligible
+Google inventory, which can include YouTube.
 
-## Where it fits
+AI Growth Kit does **not** currently implement:
 
-AI Growth Kit overlaps with several categories — mobile user-acquisition
-platforms, app store optimization tools, app growth analytics, campaign
-management, and general AI marketing assistants. Most of those specialize in one
-stage of the work and assume you already know the rest.
+- dedicated YouTube campaign management
+- YouTube publishing
+- explicit YouTube Shorts targeting
+- Demand Gen campaign management
 
-The difference here is the connection between stages: product understanding →
-audience discovery → promotion → authorized action → measurement, carried by one
-product that started from your actual app. And where it acts on an external
-platform, it proves the result by asking that platform again.
+Those should not be confused with App Campaign support.
 
-## Hackathon and deployment notes
+---
 
-The public application runs on **Netlify** at
-https://ai-growth-kit-695.netlify.app. AI Growth Kit needs a server runtime for
-authentication, database access, API integrations, Google Ads execution, and
-secret handling, so it cannot be published as a static site.
+# Measurement
 
-The HackOnVibe repository holds the source and the real development history.
-`.github/workflows/deploy.yml` is preserved unchanged; because this is a
-server-side Next.js application, that pipeline publishes a waiting page to the
-`*.hackonvibe.com` address rather than the running product. The Netlify URL
-above is the live application.
+First-party measurement infrastructure exists:
 
-Production deploys are built from a clean, tracked-files-only checkout so that a
-developer's local `.env` cannot be copied into the Next.js standalone artifact.
-Runtime secrets come from Netlify environment variables.
+```text
+/r/[slug]
+→ TrackingEvent
+→ redirect
+```
 
-## Running it yourself
+It is retained for later attribution work but is not currently one of the
+primary product stages.
+
+AI Growth Kit does not currently measure:
+
+- Google Ads spend
+- paid impressions
+- paid clicks
+- attributed installs
+- paid conversions
+- Cost Per Install
+- Return On Ad Spend
+- revenue attribution
+
+The future optimization loop depends on those measurements and therefore is not
+presented as implemented today.
+
+---
+
+# For judges
+
+## Fastest proof: public demo
+
+1. Open **[the public live demo](https://ai-growth-kit-695.netlify.app/demo)**
+2. No signup is required.
+3. Paste any valid public Google Play app URL.
+4. Press **Start AI Growth Director**.
+5. Watch the real workflow complete:
+   - App import
+   - Understand & Plan
+   - Discover
+   - Campaign Proposal
+6. Review the distinction between retrieved evidence and AI-generated reasoning.
+7. Explicitly press **Execute TEST campaign**.
+8. Watch the Google Ads execution return a real Google-generated campaign
+   resource and `PAUSED` status.
+9. Press **Verify with Google again** to issue a fresh provider query.
+
+The TEST environment cannot serve advertising or spend money.
+
+That is why this workflow can safely be made public.
+
+---
+
+## Full authenticated product
+
+1. Open **[https://ai-growth-kit-695.netlify.app](https://ai-growth-kit-695.netlify.app)**
+2. Create an account.
+3. Create a project from a real Google Play URL.
+4. Run product analysis.
+5. Explore Understand → Promote → Discover.
+6. The existing safe Google Ads TEST workflow can execute against the isolated
+   TEST hierarchy.
+7. Google Ads account connection infrastructure is available separately for
+   customer OAuth/account discovery.
+
+The production execution backend is not exposed through this interface while
+Basic Access is pending.
+
+---
+
+# Technical architecture
+
+```text
+Browser
+   ↓
+Next.js 16 / React 19 / TypeScript
+   ↓
+AI Growth Kit server
+   ├── OpenAI
+   │     product reasoning / recommendations / ad-copy proposals
+   │
+   ├── DataForSEO
+   │     real public web evidence
+   │
+   ├── Google Ads API v25
+   │     TEST execution
+   │     production execution architecture behind feature gates
+   │
+   ├── deterministic safety layer
+   │     account guards / budget policy / approvals / execution gates
+   │
+   └── Prisma 6
+          ↓
+       Neon PostgreSQL
+```
+
+Additional stack:
+
+- Auth.js v5
+- bcrypt password hashing
+- JSON Web Token (JWT) sessions
+- Google OAuth
+- Netlify server runtime
+
+The production build intentionally remains:
+
+```text
+next build --webpack
+```
+
+Slow provider workflows are split into bounded server operations where needed,
+and completed workflow state is persisted rather than being represented by
+client-side timers.
+
+---
+
+# Security
+
+- Authentication and project ownership checks
+- Tenant isolation
+- Google OAuth state protection
+- encrypted Google refresh tokens using authenticated encryption
+- credentials remain server-side
+- `.env` is ignored by Git
+- `.env.example` contains variable names and safe placeholders only
+- TEST execution requires Google to confirm `test_account = true`
+- production execution requires customer OAuth
+- production path rejects TEST advertiser accounts
+- production path rejects manager accounts as campaign targets
+- separate TEST and production authentication providers
+- production mutation disabled by default
+- production launch disabled independently by default
+- campaign creation designed to begin as `PAUSED`
+- configured average daily budget bounded by deterministic server policy
+- ownership checks on production execution records
+- provider error bodies are sanitized
+- no browser authority over secrets or server feature gates
+- public `/demo` cannot use production customer credentials
+
+---
+
+# Known limitations
+
+- Google Ads API Basic Access is still pending
+- production Google Ads mutations remain disabled
+- production execution is not exposed through the frontend
+- the production path has not yet been live-provider-verified against a normal
+  advertiser account
+- the public TEST campaign does not serve advertising or produce performance data
+- paid campaign attribution is not implemented
+- optimization based on spend/install/conversion performance is not implemented
+- Reddit's dedicated API access is pending approval
+- measurement is not a primary user-facing stage
+- no billing or subscriptions
+- no team/invite functionality
+
+---
+
+# Where AI Growth Kit fits
+
+AI Growth Kit overlaps with several existing categories:
+
+- AI marketing assistants
+- mobile user-acquisition platforms
+- App Store Optimization tools
+- audience-research products
+- campaign-management systems
+- marketing analytics products
+
+Most specialize in one stage.
+
+AI Growth Kit is built around the connection between stages:
+
+```text
+PRODUCT
+   ↓
+UNDERSTANDING
+   ↓
+EXTERNAL EVIDENCE
+   ↓
+GROWTH DECISION
+   ↓
+AUTHORIZED EXECUTION
+   ↓
+PROVIDER VERIFICATION
+```
+
+Google Ads is the first execution arm, not the whole product.
+
+Google already knows how to run an advertising auction.
+
+The role of AI Growth Kit is different: understand the product and evidence,
+decide what growth experiment makes sense, translate that into controlled
+execution, and eventually use measured results to recommend the next action.
+
+---
+
+# Hackathon and deployment notes
+
+The live server application runs on Netlify:
+
+**[https://ai-growth-kit-695.netlify.app](https://ai-growth-kit-695.netlify.app)**
+
+AI Growth Kit requires a server runtime for:
+
+- authentication
+- database access
+- OpenAI calls
+- DataForSEO calls
+- Google Ads authentication
+- Google Ads execution
+- secret handling
+
+The HackOnVibe repository contains the product source and development history.
+
+The organizer-provided:
+
+```text
+.github/workflows/deploy.yml
+```
+
+is preserved.
+
+The actual Next.js application runtime is hosted separately on Netlify.
+
+Runtime secrets are supplied through environment variables and are not committed
+to the repository.
+
+---
+
+# Running locally
 
 ```bash
 npm install
-cp .env.example .env      # fill in your own values
+cp .env.example .env
+# Fill in your own local credentials.
 npx prisma migrate deploy
 npm run dev
 ```
 
-`npm test` runs the suite — no network calls, no paid API requests, no Google
-mutations. `.env.example` lists every variable by name with an explanation and
-no values.
+Run automated checks with:
 
-## Responsible use
+```bash
+npm test
+npm run lint
+npx tsc --noEmit
+npx prisma validate
+npm run build
+```
 
-AI Growth Kit uses official platform APIs and permission-aware integrations. It
-is not built for unsolicited mass messaging, unauthorized access, spam, or
-working around platform and community rules. Discovering a community is not the
-same as being welcome to post in it, and the product is explicit about that.
+Tests use mocks for production Google Ads mutations.
+
+They do not spend advertising money or make production campaign mutations.
+
+---
+
+# Responsible use
+
+AI Growth Kit uses official platform APIs and permission-aware integrations.
+
+It is not designed for:
+
+- unsolicited mass messaging
+- unauthorized account access
+- automated spam
+- bypassing platform rules
+- pretending AI-generated inference is retrieved evidence
+- silently spending advertising money
+
+External actions that can create financial consequences are deliberately
+separated from AI recommendations and constrained by deterministic backend
+rules.
+
+The goal is not autonomous growth at any cost.
+
+The goal is **controlled, evidence-based growth execution that a small software
+team can understand and verify.**
